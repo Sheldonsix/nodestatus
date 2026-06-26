@@ -5,15 +5,15 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { decode } from '@msgpack/msgpack';
 import ipaddr, { IPv6 } from 'ipaddr.js';
 import log4js from 'log4js';
+import { authServer, getListServers, getServer } from '../controller/status';
+import { logger, emitter } from './utils';
+import setupHeartbeat from './heartbeat';
 import type {
   Box,
   ServerItem,
   BoxItem,
   IWebSocket
 } from '../../types/server';
-import { authServer, getListServers, getServer } from '../controller/status';
-import { logger, emitter } from './utils';
-import setupHeartbeat from './heartbeat';
 
 const { getLogger } = log4js;
 
@@ -38,6 +38,9 @@ type CallbackFn = (...args: any) => unknown;
 type CallbackFunction = {
   [key in CallbackType]: CallbackFn[];
 };
+
+// eslint-disable-next-line import/no-mutable-exports
+export let nodeStatusInstance: NodeStatus;
 
 export default class NodeStatus {
   private readonly options!: Options;
@@ -67,11 +70,14 @@ export default class NodeStatus {
 
   public servers: Record<string, ServerItem> = {};
 
+  public historyMap = new Map<string, Array<{ time: number, in: number, out: number }>>();
+
   public serversPub: ServerItem[] = [];
 
   constructor(server: Server, options: Options) {
     this.server = server;
     this.options = options;
+    nodeStatusInstance = this;
     emitter.on('update', this.updateStatus.bind(this));
   }
 
@@ -248,24 +254,48 @@ export default class NodeStatus {
       socket.on('close', () => clearInterval(id));
     });
 
+    setInterval(() => {
+      const now = Date.now();
+      for (const username of this.userMap.keys()) {
+        const status = this.servers[username]?.status;
+        if (!status) continue;
+        if (!this.historyMap.has(username)) {
+          this.historyMap.set(username, []);
+        }
+        const arr = this.historyMap.get(username)!;
+        arr.push({ time: now, in: status.network_in || 0, out: status.network_out || 0 });
+        if (arr.length > 1800) arr.shift();
+      }
+    }, 2000);
+
     return this.updateStatus();
   }
 
   private async updateStatus(username?: string, shouldDisconnect = false): Promise<void> {
     if (username) {
       const server = (await getServer(username)).data as BoxItem | null;
-      if (!server) delete this.servers[username];
-      else this.servers[username] = Object.assign(server, { status: this.servers?.[username]?.status || {} });
+      if (!server) {
+        delete this.servers[username];
+        this.historyMap.delete(username);
+      } else {
+        this.servers[username] = Object.assign(server, {
+          status: this.servers?.[username]?.status || {},
+          username
+        });
+      }
       shouldDisconnect && this.userMap.get(username)?.terminate() && this.userMap.delete(username);
     } else {
       const box = (await getListServers()).data as Box | null;
       if (!box) return;
       for (const k of Object.keys(box)) {
-        if (!this.servers[k]) this.servers[k] = Object.assign(box[k], { status: {} });
+        if (!this.servers[k]) this.servers[k] = Object.assign(box[k], { status: {}, username: k });
         this.servers[k].order = box[k].order;
       }
       for (const k of Object.keys(this.servers)) {
-        if (!box[k]) delete this.servers[k];
+        if (!box[k]) {
+          delete this.servers[k];
+          this.historyMap.delete(k);
+        }
       }
       if (shouldDisconnect) {
         for (const socket of this.userMap.values()) {

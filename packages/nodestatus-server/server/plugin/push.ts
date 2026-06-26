@@ -89,7 +89,7 @@ export default function usePush(instance: NodeStatus, options: PushOptions) {
     const bot = new Telegraf(options.bot_token, {
       ...(options.proxy && {
         telegram: {
-          agent: HttpsProxyAgent(options.proxy)
+          agent: HttpsProxyAgent(options.proxy) as any
         }
       })
     });

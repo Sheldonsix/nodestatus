@@ -1,3 +1,4 @@
+/* eslint-disable import/no-unresolved */
 const { violet, rose } = require('tailwindcss/colors');
 
 module.exports = {

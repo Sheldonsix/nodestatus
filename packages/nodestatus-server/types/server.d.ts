@@ -15,7 +15,7 @@ export type IServer = BaseItem & { disabled: boolean };
 
 export type Box = Record<string, BoxItem>;
 
-export type ServerItem = BoxItem & {
+export type ServerItem = BaseItem & {
   status: {
     online4: boolean;
     online6: boolean;
@@ -33,7 +33,7 @@ export type ServerItem = BoxItem & {
     hdd_total: number;
     hdd_used: number;
     custom: string;
-  } | Record<string, never>
+  } | Record<string, never>;
 };
 
 export type IResp<T = any> = {
@@ -46,6 +46,6 @@ enum STATUS {
   NORMAL = 0,
   TERMINATED = 1,
   RESUME = 2
-};
+}
 
 export type IWebSocket = WebSocket & { isAlive?: boolean, ipAddress?: string, status?: STATUS };

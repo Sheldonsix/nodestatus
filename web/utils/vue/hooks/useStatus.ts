@@ -65,7 +65,8 @@ const useStatus = (props: Props) => {
     return '-';
   });
 
-  const formatNetwork = computed(() => (data: number): string => {
+  const formatNetwork = computed(() => (data: number | undefined): string => {
+    if (data === undefined) return '0B';
     if (data < 1024) return `${data.toFixed(0)}B`;
     if (data < 1024 * 1024) return `${(data / 1024).toFixed(0)}K`;
     if (data < 1024 * 1024 * 1024) return `${(data / 1024 / 1024).toFixed(1)}M`;
@@ -73,7 +74,8 @@ const useStatus = (props: Props) => {
     return `${(data / 1024 / 1024 / 1024 / 1024).toFixed(2)}T`;
   });
 
-  const formatByte = computed(() => (data: number): string => {
+  const formatByte = computed(() => (data: number | undefined): string => {
+    if (data === undefined) return '0 B';
     if (data < 1024) return `${data.toFixed(0)} B`;
     if (data < 1024 * 1024) return `${(data / 1024).toFixed(2)} KiB`;
     if (data < 1024 * 1024 * 1024) return `${(data / 1024 / 1024).toFixed(2)} MiB`;

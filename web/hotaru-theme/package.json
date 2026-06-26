@@ -19,5 +19,9 @@
     "vite-plugin-svg-icons": "^2.0.1",
     "vue": "^3.2.33",
     "vue-tsc": "^1.0.0"
+  },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "vue-echarts": "^6.7.3"
   }
 }

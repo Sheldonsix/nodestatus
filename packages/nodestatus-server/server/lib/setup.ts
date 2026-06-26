@@ -50,7 +50,7 @@ export default async function setup(app: Koa): Promise<[Server, NetServer | null
       koaJwt({
         secret: config.webSecret
       }).unless({
-        path: [/^\/api\/session/, /^\/telegraf/, /^\/api\/config/]
+        path: [/^\/api\/session/, /^\/telegraf/, /^\/api\/config/, /^\/api\/server\/.*\/history/]
       })
     );
     app.use(router.routes());

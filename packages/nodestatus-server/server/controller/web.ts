@@ -11,6 +11,8 @@ import { createRes } from '../lib/utils';
 import { deleteAllEvents, deleteEvent, readEvents } from '../model/event';
 import config from '../lib/config';
 
+import { nodeStatusInstance } from '../lib/core';
+
 async function handleRequest<T>(ctx: Context, handler: Promise<T>): Promise<void> {
   try {
     ctx.body = createRes({ data: await handler });
@@ -96,6 +98,17 @@ const queryConfig: Middleware = async ctx => ctx.body = {
   headTitle: config.webHeadtitle
 };
 
+const getServerHistory: Middleware = async ctx => {
+  const { username } = ctx.params;
+  if (!username) {
+    ctx.status = 400;
+    ctx.body = createRes(1, 'Wrong request');
+    return;
+  }
+  const data = nodeStatusInstance?.historyMap.get(username) || [];
+  ctx.body = createRes({ data });
+};
+
 export {
   getListServers,
   setServer,
@@ -104,5 +117,6 @@ export {
   modifyOrder,
   queryEvents,
   removeEvent,
-  queryConfig
+  queryConfig,
+  getServerHistory
 };

@@ -75,6 +75,7 @@
           }}
         </div>
         <!--        <div id="expand_custom">{{server.custom}}</div>-->
+        <BandwidthChart v-if="!collapsed" :username="server.username" :status="server.status" />
       </div>
     </td>
   </tr>
@@ -84,10 +85,14 @@
 import { defineComponent, ref, PropType } from 'vue';
 
 import useStatus from '@nodestatus/web-utils/vue/hooks/useStatus';
+import BandwidthChart from './BandwidthChart.vue';
 import type { ServerItem } from '../types';
 
 export default defineComponent({
   name: 'TableItem',
+  components: {
+    BandwidthChart
+  },
   props: {
     server: {
       type: Object as PropType<ServerItem>,
@@ -115,7 +120,7 @@ export default defineComponent({
 .expandRow td > div {
   overflow: hidden;
   transition: max-height .5s ease;
-  max-height: 4em;
+  max-height: 40em;
 }
 
 .expandRow td > .collapsed {

@@ -11,8 +11,9 @@
     ]
   },
   "include": [
-    "web/*-theme/**/*.ts",
-    "web/*-theme/**/*.tsx",
-    "web/*-theme/**/*.vue"
+    "web/hotaru-theme/**/*.ts",
+    "web/hotaru-theme/**/*.vue",
+    "web/classic-theme/**/*.ts",
+    "web/classic-theme/**/*.vue"
   ]
 }
