@@ -70,6 +70,88 @@ div.bar {
   min-width: 0 !important;
 }
 
+body.dark-mode {
+  background: #141414;
+  color: #e8eaed;
+}
+
+body.dark-mode #app {
+  min-height: 100vh;
+}
+
+body.dark-mode #table {
+  background: rgba(23, 23, 23, .88);
+  color: #e8eaed;
+}
+
+body.dark-mode #table thead tr th {
+  color: #bfc8c2;
+}
+
+body.dark-mode #table.ui.basic.table tbody tr,
+body.dark-mode #table tr.tableRow {
+  background-color: rgba(32, 33, 36, .9);
+}
+
+body.dark-mode #table.ui.basic.table tbody tr:hover,
+body.dark-mode #table tr.tableRow:hover {
+  background-color: rgba(49, 50, 54, .94);
+}
+
+body.dark-mode #table.ui.table tr td,
+body.dark-mode #table tr td {
+  color: #e8eaed;
+  border-color: rgba(191, 200, 194, .22) !important;
+}
+
+body.dark-mode #table .expandRow td > div {
+  color: #cfd8d3;
+}
+
+body.dark-mode #cards .card__wrapper .ui.card {
+  background-color: rgba(32, 33, 36, .92);
+  box-shadow: 5px 5px 25px 0 rgba(0, 0, 0, .32);
+  color: #e8eaed;
+}
+
+body.dark-mode #cards .card__wrapper .ui.card .card__header p,
+body.dark-mode #cards .card__wrapper .ui.card .card__content p {
+  color: #cfd8d3;
+}
+
+body.dark-mode #cards .card__wrapper .ui.card .card__content p:last-child {
+  color: #66b7ff !important;
+}
+
+body.dark-mode .bandwidth-chart {
+  color: #cfd8d3;
+}
+
+body.dark-mode .bandwidth-chart .chart-controls button {
+  border-color: rgba(191, 200, 194, .42);
+  background: rgba(20, 20, 20, .9);
+  color: #cfd8d3;
+}
+
+body.dark-mode .bandwidth-chart .chart-controls button.active {
+  border-color: #66b7ff;
+  background: #1f6feb;
+  color: #fff;
+}
+
+body.dark-mode .updated,
+body.dark-mode .footer p {
+  color: #cfd8d3;
+}
+
+body.dark-mode .footer p a {
+  color: #8cc8ff;
+}
+
+body.dark-mode .footer p a:hover {
+  color: #ff9fc4;
+}
+
 /* Responsive */
 @media only screen and (min-width: 1200px) {
   .container {
