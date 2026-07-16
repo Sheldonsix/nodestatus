@@ -1,5 +1,4 @@
 import antfu from '@antfu/eslint-config';
-import ts from 'typescript-eslint';
 
 export default antfu(
   {
@@ -39,9 +38,6 @@ export default antfu(
   },
   // Custom rule overrides for the entire workspace
   {
-    plugins: {
-      '@typescript-eslint': ts.plugin,
-    },
     rules: {
       // Disable stylistic checks that conflict
       'style/max-statements-per-line': 'off',
