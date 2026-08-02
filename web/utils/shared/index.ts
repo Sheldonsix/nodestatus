@@ -28,3 +28,22 @@ export const parseUptime = (uptime: number): string => {
   const s = String(Math.floor(uptime % 60)).padStart(2, '0');
   return `${h}:${m}:${s}`;
 };
+
+export const formatNetwork = (data: number | null | undefined): string => {
+  if (data === null) return '-';
+  if (data === undefined) return '0B';
+  if (data < 1024) return `${data.toFixed(0)}B`;
+  if (data < 1024 * 1024) return `${(data / 1024).toFixed(0)}K`;
+  if (data < 1024 * 1024 * 1024) return `${(data / 1024 / 1024).toFixed(1)}M`;
+  if (data < 1024 * 1024 * 1024 * 1024) return `${(data / 1024 / 1024 / 1024).toFixed(2)}G`;
+  return `${(data / 1024 / 1024 / 1024 / 1024).toFixed(2)}T`;
+};
+
+export const formatByte = (data: number | undefined): string => {
+  if (data === undefined) return '0 B';
+  if (data < 1024) return `${data.toFixed(0)} B`;
+  if (data < 1024 * 1024) return `${(data / 1024).toFixed(2)} KiB`;
+  if (data < 1024 * 1024 * 1024) return `${(data / 1024 / 1024).toFixed(2)} MiB`;
+  if (data < 1024 * 1024 * 1024 * 1024) return `${(data / 1024 / 1024 / 1024).toFixed(2)} GiB`;
+  return `${(data / 1024 / 1024 / 1024 / 1024).toFixed(2)} TiB`;
+};

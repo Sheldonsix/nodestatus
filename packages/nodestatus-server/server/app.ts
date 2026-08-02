@@ -26,7 +26,7 @@ if (config.useWeb && !config.webPassword) {
 const app = new Koa();
 
 app.use(historyApiFallback({
-  whiteList: ['/admin/assets', '/telegraf'],
+  whiteList: ['^/api', '/admin/assets', '/telegraf'],
   rewrites: [
     { from: /^\/admin/ as any, to: '/admin/index.html' }
   ]

@@ -36,6 +36,12 @@ export type ServerItem = BaseItem & {
   } | Record<string, never>;
 };
 
+export type BandwidthHistoryPoint = {
+  time: number;
+  in: number | null;
+  out: number | null;
+};
+
 export type IResp<T = any> = {
   code: 0 | 1,
   data: T,

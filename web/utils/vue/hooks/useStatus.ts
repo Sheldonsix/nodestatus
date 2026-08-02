@@ -1,7 +1,12 @@
 import { computed, toRefs } from 'vue';
 
 import { ServerItem } from '../../types';
-import { parseLoad, parseUptime } from '../../shared';
+import {
+  formatByte as formatByteValue,
+  formatNetwork as formatNetworkValue,
+  parseLoad,
+  parseUptime
+} from '../../shared';
 
 interface Props {
   server: ServerItem;
@@ -65,23 +70,9 @@ const useStatus = (props: Props) => {
     return '-';
   });
 
-  const formatNetwork = computed(() => (data: number | undefined): string => {
-    if (data === undefined) return '0B';
-    if (data < 1024) return `${data.toFixed(0)}B`;
-    if (data < 1024 * 1024) return `${(data / 1024).toFixed(0)}K`;
-    if (data < 1024 * 1024 * 1024) return `${(data / 1024 / 1024).toFixed(1)}M`;
-    if (data < 1024 * 1024 * 1024 * 1024) return `${(data / 1024 / 1024 / 1024).toFixed(2)}G`;
-    return `${(data / 1024 / 1024 / 1024 / 1024).toFixed(2)}T`;
-  });
+  const formatNetwork = computed(() => formatNetworkValue);
 
-  const formatByte = computed(() => (data: number | undefined): string => {
-    if (data === undefined) return '0 B';
-    if (data < 1024) return `${data.toFixed(0)} B`;
-    if (data < 1024 * 1024) return `${(data / 1024).toFixed(2)} KiB`;
-    if (data < 1024 * 1024 * 1024) return `${(data / 1024 / 1024).toFixed(2)} MiB`;
-    if (data < 1024 * 1024 * 1024 * 1024) return `${(data / 1024 / 1024 / 1024).toFixed(2)} GiB`;
-    return `${(data / 1024 / 1024 / 1024 / 1024).toFixed(2)} TiB`;
-  });
+  const formatByte = computed(() => formatByteValue);
 
   return {
     getStatus,

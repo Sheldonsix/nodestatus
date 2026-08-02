@@ -8,19 +8,16 @@ ws.on('open', () => {
   ws.send(encode({ username: 'test', password: '123' }));
 });
 
-ws.on('message', (data) => {
+ws.on('message', data => {
   const msg = data.toString();
   console.log('服务端返回:', msg);
-  
   if (msg.includes('Authentication successful')) {
     console.log('认证成功！开始推送模拟带宽数据...');
     let rx = 1000;
     let tx = 2000;
-    
     setInterval(() => {
       rx += Math.random() * 5000;
       tx += Math.random() * 5000;
-      
       const status = {
         online4: true,
         online6: false,
@@ -29,8 +26,8 @@ ws.on('message', (data) => {
         cpu: 25,
         network_rx: rx,
         network_tx: tx,
-        network_in: Math.random() * 1024 * 500, 
-        network_out: Math.random() * 1024 * 200, 
+        network_in: Math.random() * 1024 * 500,
+        network_out: Math.random() * 1024 * 200,
         memory_total: 4096,
         memory_used: 1024,
         swap_total: 1024,
@@ -39,7 +36,6 @@ ws.on('message', (data) => {
         hdd_used: 50000,
         custom: ''
       };
-      
       ws.send(encode(status));
     }, 2000);
   } else if (msg.includes('Wrong username and/or password')) {
@@ -49,4 +45,4 @@ ws.on('message', (data) => {
 });
 
 ws.on('close', () => console.log('连接被关闭'));
-ws.on('error', (err) => console.error('WebSocket Error:', err.message));
+ws.on('error', err => console.error('WebSocket Error:', err.message));

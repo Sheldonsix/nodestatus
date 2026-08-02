@@ -48,7 +48,7 @@ app.use(middlewares['hotaru-admin']);
 app.use(middlewares[config.webTheme]);
 
 app.use(historyApiFallback({
-  whiteList: ['/admin/assets', '/telegraf'],
+  whiteList: ['^/api', '/admin/assets', '/telegraf'],
   rewrites: [
     { from: /^\/admin/ as any, to: '/admin/index.html' }
   ]

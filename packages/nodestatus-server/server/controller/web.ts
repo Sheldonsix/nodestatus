@@ -12,6 +12,24 @@ import { deleteAllEvents, deleteEvent, readEvents } from '../model/event';
 import config from '../lib/config';
 
 import { nodeStatusInstance } from '../lib/core';
+import type { BandwidthHistoryPoint } from '../../types/server';
+
+const DEFAULT_HISTORY_RANGE = 3600;
+const MAX_HISTORY_RANGE = 3600;
+const HISTORY_STEPS = [
+  { range: 60, step: 2 },
+  { range: 600, step: 10 },
+  { range: 1800, step: 30 },
+  { range: 3600, step: 60 }
+];
+
+type HistoryBucket = {
+  key: number;
+  time: number;
+  in: number;
+  out: number;
+  count: number;
+};
 
 async function handleRequest<T>(ctx: Context, handler: Promise<T>): Promise<void> {
   try {
@@ -20,6 +38,70 @@ async function handleRequest<T>(ctx: Context, handler: Promise<T>): Promise<void
     ctx.status = 500;
     ctx.body = createRes(1, err.message);
   }
+}
+
+function parseHistoryRange(value: unknown): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const range = Number(raw);
+  if (!Number.isFinite(range) || range <= 0) return DEFAULT_HISTORY_RANGE;
+  return Math.min(Math.ceil(range), MAX_HISTORY_RANGE);
+}
+
+function resolveHistoryStep(range: number): number {
+  return HISTORY_STEPS.find(item => range <= item.range)?.step || HISTORY_STEPS[HISTORY_STEPS.length - 1].step;
+}
+
+function downsampleHistoryData(history: BandwidthHistoryPoint[], range: number): BandwidthHistoryPoint[] {
+  if (!history.length) return [];
+
+  const step = resolveHistoryStep(range);
+  const cutoff = history[history.length - 1].time - range * 1000;
+  const filtered = history.filter(item => item.time >= cutoff);
+
+  if (step <= 2) return filtered;
+
+  const stepMs = step * 1000;
+  const data: BandwidthHistoryPoint[] = [];
+  let bucket: HistoryBucket | null = null;
+
+  const flushBucket = () => {
+    if (!bucket) return;
+    data.push({
+      time: bucket.time,
+      in: bucket.in / bucket.count,
+      out: bucket.out / bucket.count
+    });
+    bucket = null;
+  };
+
+  for (const item of filtered) {
+    if (item.in === null || item.out === null) {
+      flushBucket();
+      data.push({ time: item.time, in: null, out: null });
+      continue;
+    }
+
+    const key = Math.floor(item.time / stepMs);
+    if (!bucket || bucket.key !== key) {
+      flushBucket();
+      bucket = {
+        key,
+        time: item.time,
+        in: item.in,
+        out: item.out,
+        count: 1
+      };
+      continue;
+    }
+
+    bucket.time = item.time;
+    bucket.in += item.in;
+    bucket.out += item.out;
+    bucket.count += 1;
+  }
+
+  flushBucket();
+  return data;
 }
 
 const getListServers: Middleware = async ctx => {
@@ -105,12 +187,16 @@ const getServerHistory: Middleware = async ctx => {
     ctx.body = createRes(1, 'Wrong request');
     return;
   }
-  const data = nodeStatusInstance?.historyMap.get(username) || [];
+  const range = parseHistoryRange(ctx.query.range);
+  const data = downsampleHistoryData(nodeStatusInstance?.historyMap.get(username) || [], range);
   ctx.body = createRes({ data });
 };
 
 export {
+  downsampleHistoryData,
   getListServers,
+  parseHistoryRange,
+  resolveHistoryStep,
   setServer,
   addServer,
   removeServer,

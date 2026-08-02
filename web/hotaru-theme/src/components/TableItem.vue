@@ -11,40 +11,40 @@
     <td>{{ server.location }}</td>
     <td>{{ getUpTime || '–' }}</td>
     <td>{{
-        getStatus
-            ? getLoad
-            : '-'
-      }}
+      getStatus
+        ? getLoad
+        : '-'
+    }}
     </td>
     <td>{{
-        getStatus
-            ? `${formatNetwork(server.status.network_rx)} | ${formatNetwork(server.status.network_tx)}`
-            : '–'
-      }}
+      getStatus
+        ? `${formatNetwork(server.status.network_rx)} | ${formatNetwork(server.status.network_tx)}`
+        : '–'
+    }}
     </td>
     <td>{{
-        getStatus
-            ? `${formatNetwork(server.status.network_in)} | ${formatNetwork(server.status.network_out)}`
-            : '–'
-      }}
+      getStatus
+        ? `${formatNetwork(server.status.network_in)} | ${formatNetwork(server.status.network_out)}`
+        : '–'
+    }}
     </td>
     <td>
       <div class="ui progress" :class="getProcessBarStatus(getCpuStatus)">
-        <div class="bar" :style="{'width': `${getCpuStatus.toString()}%`}">
+        <div class="bar" :style="{ 'width': `${getCpuStatus.toString()}%` }">
           {{ getStatus ? `${getCpuStatus.toString()}%` : '维护中' }}
         </div>
       </div>
     </td>
     <td>
       <div class="ui progress" :class="getProcessBarStatus(getRAMStatus)">
-        <div class="bar" :style="{'width': `${getRAMStatus.toString()}%`}">
+        <div class="bar" :style="{ 'width': `${getRAMStatus.toString()}%` }">
           {{ getStatus ? `${getRAMStatus.toString()}%` : '维护中' }}
         </div>
       </div>
     </td>
     <td>
       <div class="ui progress" :class="getProcessBarStatus(getHDDStatus)">
-        <div class="bar" :style="{'width': `${getHDDStatus.toString()}%`}">
+        <div class="bar" :style="{ 'width': `${getHDDStatus.toString()}%` }">
           {{ getStatus ? `${getHDDStatus.toString()}%` : '维护中' }}
         </div>
       </div>
@@ -52,30 +52,34 @@
   </tr>
   <tr class="expandRow">
     <td colspan="12">
-      <div :class="{collapsed}" :style="{'max-height': getStatus ? '' : '0'}">
+      <div :class="{ collapsed }" :style="{ 'max-height': getStatus ? '' : '0' }">
         <div>内存信息: {{
-            getStatus
-                ? `${formatByte(server.status.memory_used * 1024)}
-                 / ${formatByte(server.status.memory_total * 1024)}`
-                : '–'
-          }}
+          getStatus
+            ? `${formatByte(server.status.memory_used * 1024)}
+          / ${formatByte(server.status.memory_total * 1024)}`
+            : '–'
+        }}
         </div>
         <div>交换分区: {{
-            getStatus
-                ? `${formatByte(server.status.swap_used * 1024)}
-                 / ${formatByte(server.status.swap_total * 1024)}`
-                : '–'
-          }}
+          getStatus
+            ? `${formatByte(server.status.swap_used * 1024)}
+          / ${formatByte(server.status.swap_total * 1024)}`
+            : '–'
+        }}
         </div>
         <div>硬盘信息: {{
-            getStatus
-                ? `${formatByte(server.status.hdd_used * 1024 * 1024)}
-                 / ${formatByte(server.status.hdd_total * 1024 * 1024)}`
-                : '–'
-          }}
+          getStatus
+            ? `${formatByte(server.status.hdd_used * 1024 * 1024)}
+          / ${formatByte(server.status.hdd_total * 1024 * 1024)}`
+            : '–'
+        }}
         </div>
+        <p @click="expanded = !expanded"
+          style="color: #2979ff; font-size: 0.9em; margin-top: 5px; cursor: pointer; user-select: none;">
+          {{ expanded ? '隐藏 ▲' : '展开 ▼' }}
+        </p>
         <!--        <div id="expand_custom">{{server.custom}}</div>-->
-        <BandwidthChart v-if="!collapsed" :username="server.username" :status="server.status" />
+        <BandwidthChart v-if="!collapsed && expanded" :username="server.username" />
       </div>
     </td>
   </tr>
@@ -102,8 +106,10 @@ export default defineComponent({
   setup(props) {
     const collapsed = ref(true);
     const utils = useStatus(props);
+    const expanded = ref(false);
     return {
       collapsed,
+      expanded,
       ...utils
     };
   }
@@ -111,19 +117,18 @@ export default defineComponent({
 </script>
 
 <style scoped>
-
 .tableRow {
   background-color: rgba(249, 249, 249, .8);
   vertical-align: middle;
 }
 
-.expandRow td > div {
+.expandRow td>div {
   overflow: hidden;
   transition: max-height .5s ease;
   max-height: 40em;
 }
 
-.expandRow td > .collapsed {
+.expandRow td>.collapsed {
   max-height: 0;
 }
 

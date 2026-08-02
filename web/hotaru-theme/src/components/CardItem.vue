@@ -9,36 +9,26 @@
         <p>{{ server.type }}</p>
       </div>
       <div class="ui tiny progress success">
-        <div class="bar" :style="{width: getStatus ? `${getRAMStatus.toString()}%` : '0%'}">
+        <div class="bar" :style="{ width: getStatus ? `${getRAMStatus.toString()}%` : '0%' }">
         </div>
       </div>
-      <div class="card__content" @click="expanded = !expanded" style="cursor: pointer; user-select: none;">
+      <div class="card__content" style="cursor: pointer; user-select: none;">
         <p>Network: {{
-            `${formatNetwork(server.status.network_rx)} | ${formatNetwork(server.status.network_tx)}`
+          `${formatNetwork(server.status.network_rx)} | ${formatNetwork(server.status.network_tx)}`
           }}</p>
         <p>负载状态: {{ getStatus ? getLoad : 'Offline' }}</p>
-        <p style="color: #2979ff; font-size: 0.9em; margin-top: 5px;">
-          {{ expanded ? 'Hide Chart ▲' : 'Show Chart ▼' }}
-        </p>
-      </div>
-      <div v-if="expanded" class="card__chart">
-        <BandwidthChart :username="server.username" :status="server.status" />
       </div>
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType, ref } from 'vue';
+import { defineComponent, PropType } from 'vue';
 import useStatus from '@nodestatus/web-utils/vue/hooks/useStatus';
-import BandwidthChart from './BandwidthChart.vue';
 import type { ServerItem } from '../types';
 
 export default defineComponent({
   name: 'CardItem',
-  components: {
-    BandwidthChart
-  },
   props: {
     server: {
       type: Object as PropType<ServerItem>,
@@ -49,14 +39,12 @@ export default defineComponent({
     const {
       getStatus, getLoad, getRAMStatus, formatNetwork
     } = useStatus(props);
-    const expanded = ref(false);
 
     return {
       getStatus,
       getLoad,
       getRAMStatus,
-      formatNetwork,
-      expanded
+      formatNetwork
     };
   }
 });

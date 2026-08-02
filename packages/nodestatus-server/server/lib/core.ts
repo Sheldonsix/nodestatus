@@ -9,6 +9,7 @@ import { authServer, getListServers, getServer } from '../controller/status';
 import { logger, emitter } from './utils';
 import setupHeartbeat from './heartbeat';
 import type {
+  BandwidthHistoryPoint,
   Box,
   ServerItem,
   BoxItem,
@@ -21,6 +22,7 @@ const loggerConnected = getLogger('Connected');
 const loggerConnecting = getLogger('Connecting');
 const loggerDisconnected = getLogger('Disconnected');
 const loggerBanned = getLogger('Banned');
+const MAX_HISTORY_POINTS = 1800;
 
 type Options = {
   interval: number;
@@ -70,7 +72,7 @@ export default class NodeStatus {
 
   public servers: Record<string, ServerItem> = {};
 
-  public historyMap = new Map<string, Array<{ time: number, in: number, out: number }>>();
+  public historyMap = new Map<string, BandwidthHistoryPoint[]>();
 
   public serversPub: ServerItem[] = [];
 
@@ -122,6 +124,16 @@ export default class NodeStatus {
     loggerBanned.debug('Address:', address, '|', 'Reason:', reason);
     this.callHook('onServerBanned', socket, address, reason);
     setTimeout(() => this.isBanned.delete(address), t * 1000);
+  }
+
+  private pushHistoryPoint(username: string, point: BandwidthHistoryPoint): void {
+    if (!this.historyMap.has(username)) {
+      this.historyMap.set(username, []);
+    }
+
+    const arr = this.historyMap.get(username)!;
+    arr.push(point);
+    if (arr.length > MAX_HISTORY_POINTS) arr.shift();
   }
 
   public launch(): Promise<void> {
@@ -228,6 +240,7 @@ export default class NodeStatus {
 
           this.userMap.delete(username);
           this.servers[username] && (this.servers[username].status = {});
+          this.pushHistoryPoint(username, { time: Date.now(), in: null, out: null });
           loggerDisconnected.warn(`Username: ${username} | Address: ${address}`);
 
           this.callHook('onServerDisconnected', socket, username);
@@ -259,12 +272,12 @@ export default class NodeStatus {
       for (const username of this.userMap.keys()) {
         const status = this.servers[username]?.status;
         if (!status) continue;
-        if (!this.historyMap.has(username)) {
-          this.historyMap.set(username, []);
-        }
-        const arr = this.historyMap.get(username)!;
-        arr.push({ time: now, in: status.network_in || 0, out: status.network_out || 0 });
-        if (arr.length > 1800) arr.shift();
+        if (status.network_in === undefined && status.network_out === undefined) continue;
+        this.pushHistoryPoint(username, {
+          time: now,
+          in: status.network_in ?? 0,
+          out: status.network_out ?? 0
+        });
       }
     }, 2000);
 
