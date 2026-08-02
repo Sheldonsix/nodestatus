@@ -240,7 +240,13 @@ export default class NodeStatus {
 
           this.userMap.delete(username);
           this.servers[username] && (this.servers[username].status = {});
-          this.pushHistoryPoint(username, { time: Date.now(), in: null, out: null });
+          this.pushHistoryPoint(username, {
+            time: Date.now(),
+            in: null,
+            out: null,
+            rx: null,
+            tx: null
+          });
           loggerDisconnected.warn(`Username: ${username} | Address: ${address}`);
 
           this.callHook('onServerDisconnected', socket, username);
@@ -272,11 +278,18 @@ export default class NodeStatus {
       for (const username of this.userMap.keys()) {
         const status = this.servers[username]?.status;
         if (!status) continue;
-        if (status.network_in === undefined && status.network_out === undefined) continue;
+        if (
+          status.network_in === undefined
+          && status.network_out === undefined
+          && status.network_rx === undefined
+          && status.network_tx === undefined
+        ) continue;
         this.pushHistoryPoint(username, {
           time: now,
           in: status.network_in ?? 0,
-          out: status.network_out ?? 0
+          out: status.network_out ?? 0,
+          rx: status.network_rx ?? 0,
+          tx: status.network_tx ?? 0
         });
       }
     }, 2000);

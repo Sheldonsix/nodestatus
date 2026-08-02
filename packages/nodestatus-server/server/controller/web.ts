@@ -23,6 +23,8 @@ const HISTORY_STEPS = [
   { range: 3600, step: 60 }
 ];
 
+type HistoryMetric = 'bandwidth' | 'traffic';
+
 type HistoryBucket = {
   key: number;
   time: number;
@@ -51,14 +53,33 @@ function resolveHistoryStep(range: number): number {
   return HISTORY_STEPS.find(item => range <= item.range)?.step || HISTORY_STEPS[HISTORY_STEPS.length - 1].step;
 }
 
-function downsampleHistoryData(history: BandwidthHistoryPoint[], range: number): BandwidthHistoryPoint[] {
+function parseHistoryMetric(value: unknown): HistoryMetric {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === 'traffic' ? 'traffic' : 'bandwidth';
+}
+
+function getMetricValues(item: BandwidthHistoryPoint, metric: HistoryMetric): [number | null, number | null] {
+  if (metric === 'traffic') return [item.rx ?? null, item.tx ?? null];
+  return [item.in, item.out];
+}
+
+function createMetricPoint(item: BandwidthHistoryPoint, metric: HistoryMetric): BandwidthHistoryPoint {
+  const [input, output] = getMetricValues(item, metric);
+  return { time: item.time, in: input, out: output };
+}
+
+function downsampleHistoryData(
+  history: BandwidthHistoryPoint[],
+  range: number,
+  metric: HistoryMetric = 'bandwidth'
+): BandwidthHistoryPoint[] {
   if (!history.length) return [];
 
   const step = resolveHistoryStep(range);
   const cutoff = history[history.length - 1].time - range * 1000;
   const filtered = history.filter(item => item.time >= cutoff);
 
-  if (step <= 2) return filtered;
+  if (step <= 2) return filtered.map(item => createMetricPoint(item, metric));
 
   const stepMs = step * 1000;
   const data: BandwidthHistoryPoint[] = [];
@@ -75,7 +96,8 @@ function downsampleHistoryData(history: BandwidthHistoryPoint[], range: number):
   };
 
   for (const item of filtered) {
-    if (item.in === null || item.out === null) {
+    const [input, output] = getMetricValues(item, metric);
+    if (input === null || output === null) {
       flushBucket();
       data.push({ time: item.time, in: null, out: null });
       continue;
@@ -87,17 +109,23 @@ function downsampleHistoryData(history: BandwidthHistoryPoint[], range: number):
       bucket = {
         key,
         time: item.time,
-        in: item.in,
-        out: item.out,
+        in: input,
+        out: output,
         count: 1
       };
       continue;
     }
 
     bucket.time = item.time;
-    bucket.in += item.in;
-    bucket.out += item.out;
-    bucket.count += 1;
+    if (metric === 'traffic') {
+      bucket.in = input;
+      bucket.out = output;
+      bucket.count = 1;
+    } else {
+      bucket.in += input;
+      bucket.out += output;
+      bucket.count += 1;
+    }
   }
 
   flushBucket();
@@ -188,13 +216,15 @@ const getServerHistory: Middleware = async ctx => {
     return;
   }
   const range = parseHistoryRange(ctx.query.range);
-  const data = downsampleHistoryData(nodeStatusInstance?.historyMap.get(username) || [], range);
+  const metric = parseHistoryMetric(ctx.query.metric);
+  const data = downsampleHistoryData(nodeStatusInstance?.historyMap.get(username) || [], range, metric);
   ctx.body = createRes({ data });
 };
 
 export {
   downsampleHistoryData,
   getListServers,
+  parseHistoryMetric,
   parseHistoryRange,
   resolveHistoryStep,
   setServer,

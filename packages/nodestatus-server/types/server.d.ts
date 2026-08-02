@@ -40,6 +40,8 @@ export type BandwidthHistoryPoint = {
   time: number;
   in: number | null;
   out: number | null;
+  rx?: number | null;
+  tx?: number | null;
 };
 
 export type IResp<T = any> = {

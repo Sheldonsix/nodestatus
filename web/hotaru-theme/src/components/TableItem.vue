@@ -79,7 +79,10 @@
           {{ expanded ? '隐藏 ▲' : '展开 ▼' }}
         </p>
         <!--        <div id="expand_custom">{{server.custom}}</div>-->
-        <BandwidthChart v-if="!collapsed && expanded" :username="server.username" />
+        <div v-if="!collapsed && expanded" class="history-charts">
+          <BandwidthChart :username="server.username" title="网络" metric="bandwidth" />
+          <BandwidthChart :username="server.username" title="流量" metric="traffic" />
+        </div>
       </div>
     </td>
   </tr>
@@ -125,7 +128,7 @@ export default defineComponent({
 .expandRow td>div {
   overflow: hidden;
   transition: max-height .5s ease;
-  max-height: 40em;
+  max-height: 72em;
 }
 
 .expandRow td>.collapsed {
@@ -147,6 +150,11 @@ export default defineComponent({
   font-size: .9rem;
   line-height: 25px;
   color: white;
+}
+
+.history-charts {
+  display: grid;
+  gap: 12px;
 }
 
 tr td {

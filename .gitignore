@@ -31,5 +31,6 @@ pnpm-debug.log*
 .vercel
 
 *.timestamp*.mjs
+*.tsbuildinfo
 
 docs/

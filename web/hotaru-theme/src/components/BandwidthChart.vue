@@ -25,6 +25,7 @@ import {
 } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { formatNetwork } from '@nodestatus/web-utils/shared';
+import type { PropType } from 'vue';
 import type { BandwidthHistoryPoint } from '@nodestatus/web-utils/types';
 
 use([
@@ -37,6 +38,7 @@ use([
 ]);
 
 type ChartPoint = [number, number | null];
+type HistoryMetric = 'bandwidth' | 'traffic';
 
 const HISTORY_REFRESH_INTERVAL = 2000;
 
@@ -61,6 +63,14 @@ export default defineComponent({
     username: {
       type: String,
       required: true
+    },
+    title: {
+      type: String,
+      default: '带宽'
+    },
+    metric: {
+      type: String as PropType<HistoryMetric>,
+      default: 'bandwidth'
     }
   },
   setup(props) {
@@ -72,7 +82,10 @@ export default defineComponent({
     const loadHistory = async () => {
       const currentRequestId = ++requestId;
       try {
-        const params = new URLSearchParams({ range: timeframe.value.toString() });
+        const params = new URLSearchParams({
+          metric: props.metric,
+          range: timeframe.value.toString()
+        });
         const res = await fetch(`/api/server/${encodeURIComponent(props.username)}/history?${params.toString()}`);
         const json = await res.json();
         if (currentRequestId !== requestId) return;
@@ -101,7 +114,7 @@ export default defineComponent({
       }
     });
 
-    watch(() => props.username, () => {
+    watch(() => [props.username, props.metric], () => {
       historyData.value = [];
       loadHistory();
     });
@@ -116,6 +129,11 @@ export default defineComponent({
       const outData: ChartPoint[] = historyData.value.map(d => [d.time, d.out]);
 
       return {
+        title: {
+          text: props.title,
+          left: 36,
+          top: 20
+        },
         tooltip: {
           trigger: 'axis',
           formatter(params: any) {
