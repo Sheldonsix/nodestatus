@@ -9,18 +9,22 @@ import {
 } from '../model/server';
 import { createRes } from '../lib/utils';
 import { deleteAllEvents, deleteEvent, readEvents } from '../model/event';
+import { readServerHistory } from '../model/history';
 import config from '../lib/config';
 
 import { nodeStatusInstance } from '../lib/core';
 import type { BandwidthHistoryPoint } from '../../types/server';
 
 const DEFAULT_HISTORY_RANGE = 3600;
-const MAX_HISTORY_RANGE = 3600;
+const MAX_HISTORY_RANGE = 30 * 24 * 3600;
 const HISTORY_STEPS = [
   { range: 60, step: 2 },
   { range: 600, step: 10 },
   { range: 1800, step: 30 },
-  { range: 3600, step: 60 }
+  { range: 3600, step: 60 },
+  { range: 86400, step: 300 },
+  { range: 604800, step: 1800 },
+  { range: MAX_HISTORY_RANGE, step: 3600 }
 ];
 
 type HistoryMetric = 'bandwidth' | 'traffic';
@@ -68,6 +72,11 @@ function createMetricPoint(item: BandwidthHistoryPoint, metric: HistoryMetric): 
   return { time: item.time, in: input, out: output };
 }
 
+function mergeHistoryData(stored: BandwidthHistoryPoint[], memory: BandwidthHistoryPoint[]): BandwidthHistoryPoint[] {
+  const lastStoredTime = stored[stored.length - 1]?.time || 0;
+  return stored.concat(memory.filter(item => item.time > lastStoredTime)).sort((x, y) => x.time - y.time);
+}
+
 function downsampleHistoryData(
   history: BandwidthHistoryPoint[],
   range: number,
@@ -89,8 +98,8 @@ function downsampleHistoryData(
     if (!bucket) return;
     data.push({
       time: bucket.time,
-      in: bucket.in / bucket.count,
-      out: bucket.out / bucket.count
+      in: metric === 'traffic' ? bucket.in : bucket.in / bucket.count,
+      out: metric === 'traffic' ? bucket.out : bucket.out / bucket.count
     });
     bucket = null;
   };
@@ -118,9 +127,8 @@ function downsampleHistoryData(
 
     bucket.time = item.time;
     if (metric === 'traffic') {
-      bucket.in = input;
-      bucket.out = output;
-      bucket.count = 1;
+      bucket.in += input;
+      bucket.out += output;
     } else {
       bucket.in += input;
       bucket.out += output;
@@ -224,12 +232,17 @@ const getServerHistory: Middleware = async ctx => {
   }
   const range = parseHistoryRange(ctx.query.range);
   const metric = parseHistoryMetric(ctx.query.metric);
-  const data = downsampleHistoryData(nodeStatusInstance?.historyMap.get(username) || [], range, metric);
-  ctx.body = createRes({ data });
+  await handleRequest(ctx, (async () => {
+    const since = Date.now() - range * 1000;
+    const stored = await readServerHistory(username, new Date(since));
+    const memory = (nodeStatusInstance?.historyMap.get(username) || []).filter(item => item.time >= since);
+    return downsampleHistoryData(mergeHistoryData(stored, memory), range, metric);
+  })());
 };
 
 export {
   downsampleHistoryData,
+  mergeHistoryData,
   getListServers,
   parseHistoryMetric,
   parseHistoryRange,

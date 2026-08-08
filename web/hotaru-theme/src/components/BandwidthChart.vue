@@ -3,8 +3,10 @@
     <div class="chart-controls">
       <button @click="setTimeframe(60)" :class="{ active: timeframe === 60 }">1 Min</button>
       <button @click="setTimeframe(600)" :class="{ active: timeframe === 600 }">10 Min</button>
-      <button @click="setTimeframe(1800)" :class="{ active: timeframe === 1800 }">30 Min</button>
-      <button @click="setTimeframe(3600)" :class="{ active: timeframe === 3600 }">1 Hour</button>
+      <button @click="setTimeframe(3600)" :class="{ active: timeframe === 3600 }">1h</button>
+      <button @click="setTimeframe(86400)" :class="{ active: timeframe === 86400 }">1d</button>
+      <button @click="setTimeframe(604800)" :class="{ active: timeframe === 604800 }">7d</button>
+      <button @click="setTimeframe(2592000)" :class="{ active: timeframe === 2592000 }">30d</button>
     </div>
     <v-chart class="chart" :option="chartOption" autoresize />
   </div>
@@ -75,7 +77,7 @@ export default defineComponent({
   },
   setup(props) {
     const historyData = ref<BandwidthHistoryPoint[]>([]);
-    const timeframe = ref(60); // in seconds
+    const timeframe = ref(3600); // in seconds
     let refreshTimer: number | undefined;
     let requestId = 0;
 
@@ -215,6 +217,7 @@ export default defineComponent({
 
 .chart-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 10px;
   justify-content: center;

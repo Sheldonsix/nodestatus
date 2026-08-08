@@ -6,6 +6,7 @@ import { decode } from '@msgpack/msgpack';
 import ipaddr, { IPv6 } from 'ipaddr.js';
 import log4js from 'log4js';
 import { authServer, getListServers, getServer } from '../controller/status';
+import { createServerHistory, deleteServerHistoryBefore } from '../model/history';
 import { logger, emitter } from './utils';
 import setupHeartbeat from './heartbeat';
 import type {
@@ -23,6 +24,10 @@ const loggerConnecting = getLogger('Connecting');
 const loggerDisconnected = getLogger('Disconnected');
 const loggerBanned = getLogger('Banned');
 const MAX_HISTORY_POINTS = 1800;
+const HISTORY_SAMPLE_INTERVAL = 2000;
+const HISTORY_FLUSH_INTERVAL = 5 * 60 * 1000;
+const HISTORY_TTL = 30 * 24 * 60 * 60 * 1000;
+const HISTORY_TTL_INTERVAL = 24 * 60 * 60 * 1000;
 
 type Options = {
   interval: number;
@@ -39,6 +44,37 @@ type CallbackType =
 type CallbackFn = (...args: any) => unknown;
 type CallbackFunction = {
   [key in CallbackType]: CallbackFn[];
+};
+
+type TrafficTotals = {
+  rx: number;
+  tx: number;
+};
+
+type HistoryAggregate = {
+  server_id: number;
+  time: number;
+  cpu: number;
+  memory_used: number;
+  memory_total: number;
+  network_in: number;
+  network_out: number;
+  network_rx: number;
+  network_tx: number;
+  count: number;
+};
+
+const toNumber = (value: unknown): number => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const pruneHistory = async (): Promise<void> => {
+  try {
+    await deleteServerHistoryBefore(new Date(Date.now() - HISTORY_TTL));
+  } catch (error: any) {
+    logger.error(`Failed to prune history: ${error.message || error}`);
+  }
 };
 
 // eslint-disable-next-line import/no-mutable-exports
@@ -73,6 +109,12 @@ export default class NodeStatus {
   public servers: Record<string, ServerItem> = {};
 
   public historyMap = new Map<string, BandwidthHistoryPoint[]>();
+
+  private historyAggregateMap = new Map<string, HistoryAggregate>();
+
+  private trafficMap = new Map<string, TrafficTotals>();
+
+  private isHistoryFlushing = false;
 
   public serversPub: ServerItem[] = [];
 
@@ -134,6 +176,108 @@ export default class NodeStatus {
     const arr = this.historyMap.get(username)!;
     arr.push(point);
     if (arr.length > MAX_HISTORY_POINTS) arr.shift();
+  }
+
+  private getTrafficDelta(username: string, status: ServerItem['status']): TrafficTotals {
+    const current = {
+      rx: toNumber(status.network_rx),
+      tx: toNumber(status.network_tx)
+    };
+    const previous = this.trafficMap.get(username);
+    this.trafficMap.set(username, current);
+    if (!previous) return { rx: 0, tx: 0 };
+    return {
+      rx: current.rx >= previous.rx ? current.rx - previous.rx : 0,
+      tx: current.tx >= previous.tx ? current.tx - previous.tx : 0
+    };
+  }
+
+  private updateHistoryAggregate(username: string, status: ServerItem['status'], point: BandwidthHistoryPoint): void {
+    const serverId = this.servers[username]?.id;
+    if (!serverId) return;
+
+    const aggregate = this.historyAggregateMap.get(username) || {
+      server_id: serverId,
+      time: point.time,
+      cpu: 0,
+      memory_used: 0,
+      memory_total: 0,
+      network_in: 0,
+      network_out: 0,
+      network_rx: 0,
+      network_tx: 0,
+      count: 0
+    };
+
+    aggregate.server_id = serverId;
+    aggregate.time = point.time;
+    aggregate.cpu += toNumber(status.cpu);
+    aggregate.memory_used += toNumber(status.memory_used);
+    aggregate.memory_total += toNumber(status.memory_total);
+    aggregate.network_in += point.in ?? 0;
+    aggregate.network_out += point.out ?? 0;
+    aggregate.network_rx += point.rx ?? 0;
+    aggregate.network_tx += point.tx ?? 0;
+    aggregate.count += 1;
+
+    this.historyAggregateMap.set(username, aggregate);
+  }
+
+  private sampleHistory(): void {
+    const now = Date.now();
+    for (const username of this.userMap.keys()) {
+      const status = this.servers[username]?.status;
+      if (!status) continue;
+      if (
+        status.network_in === undefined
+        && status.network_out === undefined
+        && status.network_rx === undefined
+        && status.network_tx === undefined
+      ) continue;
+
+      const traffic = this.getTrafficDelta(username, status);
+      const point = {
+        time: now,
+        in: toNumber(status.network_in),
+        out: toNumber(status.network_out),
+        rx: traffic.rx,
+        tx: traffic.tx
+      };
+
+      this.pushHistoryPoint(username, point);
+      this.updateHistoryAggregate(username, status, point);
+    }
+  }
+
+  private async flushHistory(): Promise<void> {
+    if (this.isHistoryFlushing) return;
+    const entries = Array.from(this.historyAggregateMap.entries()).filter(([, item]) => item.count > 0);
+    if (!entries.length) return;
+
+    this.isHistoryFlushing = true;
+    try {
+      await createServerHistory(entries.map(([, item]) => ({
+        server_id: item.server_id,
+        created_at: new Date(item.time),
+        cpu: item.cpu / item.count,
+        memory_used: item.memory_used / item.count,
+        memory_total: item.memory_total / item.count,
+        network_in: item.network_in / item.count,
+        network_out: item.network_out / item.count,
+        network_rx: item.network_rx,
+        network_tx: item.network_tx
+      })));
+
+      for (const [username, item] of entries) {
+        if (this.historyAggregateMap.get(username) === item) {
+          this.historyAggregateMap.delete(username);
+        }
+      }
+    } catch (error: any) {
+      logger.error(`Failed to persist history: ${error.message || error}`);
+    } finally {
+      this.isHistoryFlushing = false;
+    }
   }
 
   public launch(): Promise<void> {
@@ -240,6 +384,7 @@ export default class NodeStatus {
 
           this.userMap.delete(username);
           this.servers[username] && (this.servers[username].status = {});
+          this.trafficMap.delete(username);
           this.pushHistoryPoint(username, {
             time: Date.now(),
             in: null,
@@ -273,26 +418,10 @@ export default class NodeStatus {
       socket.on('close', () => clearInterval(id));
     });
 
-    setInterval(() => {
-      const now = Date.now();
-      for (const username of this.userMap.keys()) {
-        const status = this.servers[username]?.status;
-        if (!status) continue;
-        if (
-          status.network_in === undefined
-          && status.network_out === undefined
-          && status.network_rx === undefined
-          && status.network_tx === undefined
-        ) continue;
-        this.pushHistoryPoint(username, {
-          time: now,
-          in: status.network_in ?? 0,
-          out: status.network_out ?? 0,
-          rx: status.network_rx ?? 0,
-          tx: status.network_tx ?? 0
-        });
-      }
-    }, 2000);
+    setInterval(() => this.sampleHistory(), HISTORY_SAMPLE_INTERVAL);
+    setInterval(() => this.flushHistory(), HISTORY_FLUSH_INTERVAL);
+    pruneHistory();
+    setInterval(pruneHistory, HISTORY_TTL_INTERVAL);
 
     return this.updateStatus();
   }
@@ -303,6 +432,8 @@ export default class NodeStatus {
       if (!server) {
         delete this.servers[username];
         this.historyMap.delete(username);
+        this.historyAggregateMap.delete(username);
+        this.trafficMap.delete(username);
       } else {
         this.servers[username] = Object.assign(server, {
           status: this.servers?.[username]?.status || {},
@@ -321,6 +452,8 @@ export default class NodeStatus {
         if (!box[k]) {
           delete this.servers[k];
           this.historyMap.delete(k);
+          this.historyAggregateMap.delete(k);
+          this.trafficMap.delete(k);
         }
       }
       if (shouldDisconnect) {
