@@ -1,13 +1,20 @@
-import { expect, test } from 'vitest';
+import {
+  afterEach, expect, test, vi
+} from 'vitest';
 import {
   downsampleHistoryData,
   parseHistoryMetric,
   parseHistoryRange,
+  queryStatus,
   resolveHistoryStep
 } from '../../server/controller/web';
 import type { BandwidthHistoryPoint } from '../../types/server';
 
 const baseTime = 1700000000000;
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 const createPoint = (seconds: number, input: number | null, output: number | null): BandwidthHistoryPoint => ({
   time: baseTime + seconds * 1000,
@@ -50,6 +57,16 @@ test('parse history metric with bandwidth as default', () => {
   expect(parseHistoryMetric('traffic')).toBe('traffic');
   expect(parseHistoryMetric(['traffic'])).toBe('traffic');
   expect(parseHistoryMetric('unknown')).toBe('bandwidth');
+});
+
+test('query public status in websocket payload shape', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(baseTime);
+  const ctx = {} as any;
+  await queryStatus(ctx, async () => undefined);
+  expect(ctx.body).toEqual({
+    servers: [],
+    updated: 1700000000
+  });
 });
 
 test('downsample bandwidth history by averaging each bucket', () => {

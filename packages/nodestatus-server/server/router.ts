@@ -2,7 +2,7 @@ import Router from '@koa/router';
 import { createSession, verifySession } from './controller/user';
 import {
   removeServer, getListServers, addServer, setServer, modifyOrder, queryEvents,
-  removeEvent, queryConfig, getServerHistory
+  removeEvent, queryConfig, queryStatus, getServerHistory
 } from './controller/web';
 
 const router = new Router({ prefix: '/api' });
@@ -23,6 +23,7 @@ router.delete('/events/:id?', removeEvent);
 /* Config */
 
 router.get('/config', queryConfig);
+router.get('/status', queryStatus);
 
 router.get('/server/:username/history', getServerHistory);
 

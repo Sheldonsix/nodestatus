@@ -208,6 +208,13 @@ const queryConfig: Middleware = async ctx => ctx.body = {
   headTitle: config.webHeadtitle
 };
 
+const queryStatus: Middleware = async ctx => {
+  ctx.body = {
+    servers: nodeStatusInstance?.serversPub || [],
+    updated: ~~(Date.now() / 1000)
+  };
+};
+
 const getServerHistory: Middleware = async ctx => {
   const { username } = ctx.params;
   if (!username) {
@@ -234,5 +241,6 @@ export {
   queryEvents,
   removeEvent,
   queryConfig,
+  queryStatus,
   getServerHistory
 };

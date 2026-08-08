@@ -14,7 +14,7 @@ const app = new Koa();
 const frontendPath = resolve(__dirname, '../build/dist');
 
 app.use(historyApiFallback({
-  whiteList: ['/admin/assets'],
+  whiteList: ['^/api', '/admin/assets'],
   rewrites: [
     { from: /^\/admin/ as any, to: '/admin/index.html' }
   ]
@@ -52,7 +52,7 @@ app.use(
   koaJwt({
     secret: config.webSecret
   }).unless({
-    path: /^\/api\/session/
+    path: [/^\/api\/session/, /^\/api\/status$/]
   })
 );
 app.use(router.routes());

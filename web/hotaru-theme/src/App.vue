@@ -13,7 +13,6 @@
 
 <script lang="ts">
 import { defineComponent, ref, onBeforeUnmount } from 'vue';
-import WebSocket from 'reconnecting-websocket';
 
 import TheError from '@nodestatus/web-utils/vue/components/TheError.vue';
 import UpdateTime from '@nodestatus/web-utils/vue/components/UpdateTime.vue';
@@ -41,16 +40,20 @@ export default defineComponent({
   setup() {
     const servers = ref<Array<ServerItem>>();
     const updated = ref<number>();
-    const ws = new WebSocket(`${document.location.protocol.replace('http', 'ws')}${window.location.host}/public`);
-    ws.onopen = () => console.info('Connect to backend successfully!');
-    ws.onclose = () => console.warn('WebSocket disconnected!');
-    ws.onerror = () => console.error('An error occurred while connecting to the backend');
-    ws.onmessage = evt => {
-      const data = JSON.parse(evt.data);
+
+    const loadStatus = async () => {
+      const resp = await fetch('/api/status');
+      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+      const data = await resp.json() as { servers: Array<ServerItem>, updated: number };
       servers.value = data.servers;
       updated.value = data.updated;
     };
-    onBeforeUnmount(ws.close);
+    const pollStatus = () => loadStatus().catch(error => console.error('An error occurred while connecting to the backend', error));
+
+    pollStatus();
+    const id = window.setInterval(pollStatus, 1500);
+    onBeforeUnmount(() => clearInterval(id));
+
     return {
       servers,
       updated
