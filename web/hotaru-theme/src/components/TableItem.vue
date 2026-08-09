@@ -1,35 +1,8 @@
-<script lang="ts">
-import type { PropType } from 'vue';
-import type { ServerItem } from '../types';
-
-import useStatus from '@nodestatus/web-utils/vue/hooks/useStatus';
-import { defineComponent, ref } from 'vue';
-
-export default defineComponent({
-  name: 'TableItem',
-  props: {
-    server: {
-      type: Object as PropType<ServerItem>,
-      default: () => ({ status: {} }),
-    },
-  },
-  setup(props) {
-    const collapsed = ref(true);
-    const utils = useStatus(props);
-    return {
-      collapsed,
-      ...utils,
-    };
-  },
-});
-</script>
-
 <template>
   <tr class="tableRow" @click="collapsed = !collapsed">
     <td>
       <div class="ui progress" :class="getStatus ? 'success' : 'error'">
-        <div class="bar" style="width: 100%">
-          <span> {{ getStatus ? '运行中' : '维护中' }} </span>
+        <div class="bar" style="width: 100%"><span> {{ getStatus ? '运行中' : '维护中' }} </span>
         </div>
       </div>
     </td>
@@ -37,44 +10,41 @@ export default defineComponent({
     <td>{{ server.type }}</td>
     <td>{{ server.location }}</td>
     <td>{{ getUpTime || '–' }}</td>
-    <td>
-      {{
-        getStatus
-          ? getLoad
-          : '-'
-      }}
+    <td>{{
+      getStatus
+        ? getLoad
+        : '-'
+    }}
     </td>
-    <td>
-      {{
-        getStatus
-          ? `${formatNetwork(server.status.network_rx)} | ${formatNetwork(server.status.network_tx)}`
-          : '–'
-      }}
+    <td>{{
+      getStatus
+        ? `${formatNetwork(server.status.network_rx)} | ${formatNetwork(server.status.network_tx)}`
+        : '–'
+    }}
     </td>
-    <td>
-      {{
-        getStatus
-          ? `${formatNetwork(server.status.network_in)} | ${formatNetwork(server.status.network_out)}`
-          : '–'
-      }}
+    <td>{{
+      getStatus
+        ? `${formatNetwork(server.status.network_in)} | ${formatNetwork(server.status.network_out)}`
+        : '–'
+    }}
     </td>
     <td>
       <div class="ui progress" :class="getProcessBarStatus(getCpuStatus)">
-        <div class="bar" :style="{ width: `${getCpuStatus.toString()}%` }">
+        <div class="bar" :style="{ 'width': `${getCpuStatus.toString()}%` }">
           {{ getStatus ? `${getCpuStatus.toString()}%` : '维护中' }}
         </div>
       </div>
     </td>
     <td>
       <div class="ui progress" :class="getProcessBarStatus(getRAMStatus)">
-        <div class="bar" :style="{ width: `${getRAMStatus.toString()}%` }">
+        <div class="bar" :style="{ 'width': `${getRAMStatus.toString()}%` }">
           {{ getStatus ? `${getRAMStatus.toString()}%` : '维护中' }}
         </div>
       </div>
     </td>
     <td>
       <div class="ui progress" :class="getProcessBarStatus(getHDDStatus)">
-        <div class="bar" :style="{ width: `${getHDDStatus.toString()}%` }">
+        <div class="bar" :style="{ 'width': `${getHDDStatus.toString()}%` }">
           {{ getStatus ? `${getHDDStatus.toString()}%` : '维护中' }}
         </div>
       </div>
@@ -83,35 +53,71 @@ export default defineComponent({
   <tr class="expandRow">
     <td colspan="12">
       <div :class="{ collapsed }" :style="{ 'max-height': getStatus ? '' : '0' }">
-        <div>
-          内存信息: {{
-            getStatus
-              ? `${formatByte(server.status.memory_used * 1024)}
-                 / ${formatByte(server.status.memory_total * 1024)}`
-              : '–'
-          }}
+        <div>内存信息: {{
+          getStatus
+            ? `${formatByte(server.status.memory_used * 1024)}
+          / ${formatByte(server.status.memory_total * 1024)}`
+            : '–'
+        }}
         </div>
-        <div>
-          交换分区: {{
-            getStatus
-              ? `${formatByte(server.status.swap_used * 1024)}
-                 / ${formatByte(server.status.swap_total * 1024)}`
-              : '–'
-          }}
+        <div>交换分区: {{
+          getStatus
+            ? `${formatByte(server.status.swap_used * 1024)}
+          / ${formatByte(server.status.swap_total * 1024)}`
+            : '–'
+        }}
         </div>
-        <div>
-          硬盘信息: {{
-            getStatus
-              ? `${formatByte(server.status.hdd_used * 1024 * 1024)}
-                 / ${formatByte(server.status.hdd_total * 1024 * 1024)}`
-              : '–'
-          }}
+        <div>硬盘信息: {{
+          getStatus
+            ? `${formatByte(server.status.hdd_used * 1024 * 1024)}
+          / ${formatByte(server.status.hdd_total * 1024 * 1024)}`
+            : '–'
+        }}
         </div>
-        <!--        <div id="expand_custom">{{server.custom}}</div> -->
+        <p @click="expanded = !expanded"
+          style="color: #2979ff; font-size: 0.9em; margin-top: 5px; cursor: pointer; user-select: none;">
+          {{ expanded ? '隐藏 ▲' : '展开 ▼' }}
+        </p>
+        <!--        <div id="expand_custom">{{server.custom}}</div>-->
+        <div v-if="!collapsed && expanded" class="history-charts">
+          <BandwidthChart :username="server.username" title="网络" metric="bandwidth" />
+          <BandwidthChart :username="server.username" title="流量" metric="traffic" />
+        </div>
       </div>
     </td>
   </tr>
 </template>
+
+<script lang="ts">
+import { defineComponent, ref, PropType } from 'vue';
+
+import useStatus from '@nodestatus/web-utils/vue/hooks/useStatus';
+import BandwidthChart from './BandwidthChart.vue';
+import type { ServerItem } from '../types';
+
+export default defineComponent({
+  name: 'TableItem',
+  components: {
+    BandwidthChart
+  },
+  props: {
+    server: {
+      type: Object as PropType<ServerItem>,
+      default: () => ({ status: {} })
+    }
+  },
+  setup(props) {
+    const collapsed = ref(true);
+    const utils = useStatus(props);
+    const expanded = ref(false);
+    return {
+      collapsed,
+      expanded,
+      ...utils
+    };
+  }
+});
+</script>
 
 <style scoped>
 .tableRow {
@@ -119,13 +125,13 @@ export default defineComponent({
   vertical-align: middle;
 }
 
-.expandRow td > div {
+.expandRow td>div {
   overflow: hidden;
   transition: max-height .5s ease;
-  max-height: 4em;
+  max-height: 72em;
 }
 
-.expandRow td > .collapsed {
+.expandRow td>.collapsed {
   max-height: 0;
 }
 
@@ -144,6 +150,11 @@ export default defineComponent({
   font-size: .9rem;
   line-height: 25px;
   color: white;
+}
+
+.history-charts {
+  display: grid;
+  gap: 12px;
 }
 
 tr td {

@@ -38,6 +38,7 @@ spawn(platform() === 'win32' ? 'npm.cmd' : 'npm', ['run', 'prestart'], {
     console.log(`[ERROR]: ${error.message || error}`);
     console.log('Something wrong. Please check if you have installed pm2 correctly.');
     console.log('Fallback to non-pm2 daemon');
+    // eslint-disable-next-line import/no-unresolved
     await import('../build/app.js');
   }
 });

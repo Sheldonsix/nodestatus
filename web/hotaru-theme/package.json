@@ -8,6 +8,10 @@
     "dev": "vite",
     "serve": "vite preview"
   },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "vue-echarts": "^6.7.3"
+  },
   "devDependencies": {
     "@nodestatus/web-utils": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.7",

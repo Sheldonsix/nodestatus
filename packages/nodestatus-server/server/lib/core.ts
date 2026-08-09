@@ -1,21 +1,22 @@
-import type { IPv6 } from 'ipaddr.js';
-import type { Server } from 'node:http';
-import type { WebSocket } from 'ws';
+import { Server } from 'http';
+import { isIPv4 } from 'net';
+import timers from 'timers/promises';
+import { WebSocketServer, WebSocket } from 'ws';
+import { decode } from '@msgpack/msgpack';
+import ipaddr, { IPv6 } from 'ipaddr.js';
+import log4js from 'log4js';
+import { authServer, getListServers, getServer } from '../controller/status';
+import { createServerHistory, deleteServerHistoryBefore } from '../model/history';
+import { logger, emitter } from './utils';
+import setupHeartbeat from './heartbeat';
 import type {
+  BandwidthHistoryPoint,
   Box,
+  ServerItem,
   BoxItem,
   IWebSocket,
-  ServerItem,
+  ResourceHistoryPoint
 } from '../../types/server';
-import { isIPv4 } from 'node:net';
-import timers from 'node:timers/promises';
-import { decode } from '@msgpack/msgpack';
-import ipaddr from 'ipaddr.js';
-import log4js from 'log4js';
-import { WebSocketServer } from 'ws';
-import { authServer, getListServers, getServer } from '../controller/status';
-import setupHeartbeat from './heartbeat';
-import { emitter, logger } from './utils';
 
 const { getLogger } = log4js;
 
@@ -23,23 +24,62 @@ const loggerConnected = getLogger('Connected');
 const loggerConnecting = getLogger('Connecting');
 const loggerDisconnected = getLogger('Disconnected');
 const loggerBanned = getLogger('Banned');
+const MAX_HISTORY_POINTS = 1800;
+const HISTORY_SAMPLE_INTERVAL = 2000;
+const HISTORY_FLUSH_INTERVAL = 5 * 60 * 1000;
+const HISTORY_TTL = 30 * 24 * 60 * 60 * 1000;
+const HISTORY_TTL_INTERVAL = 24 * 60 * 60 * 1000;
 
-interface Options {
+type Options = {
   interval: number;
   pingInterval: number;
   reconnectTimeout: number;
-}
+};
 
-type CallbackType
-  = | 'onServerConnect'
-    | 'onServerBanned'
-    | 'onServerConnected'
-    | 'onServerDisconnected'
-    | 'onServerFinish';
+type CallbackType =
+  | 'onServerConnect'
+  | 'onServerBanned'
+  | 'onServerConnected'
+  | 'onServerDisconnected'
+  | 'onServerFinish';
 type CallbackFn = (...args: any) => unknown;
 type CallbackFunction = {
   [key in CallbackType]: CallbackFn[];
 };
+
+type TrafficTotals = {
+  rx: number;
+  tx: number;
+};
+
+type HistoryAggregate = {
+  server_id: number;
+  time: number;
+  cpu: number;
+  memory_used: number;
+  memory_total: number;
+  network_in: number;
+  network_out: number;
+  network_rx: number;
+  network_tx: number;
+  count: number;
+};
+
+const toNumber = (value: unknown): number => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const pruneHistory = async (): Promise<void> => {
+  try {
+    await deleteServerHistoryBefore(new Date(Date.now() - HISTORY_TTL));
+  } catch (error: any) {
+    logger.error(`Failed to prune history: ${error.message || error}`);
+  }
+};
+
+// eslint-disable-next-line import/no-mutable-exports
+export let nodeStatusInstance: NodeStatus;
 
 export default class NodeStatus {
   private readonly options!: Options;
@@ -64,16 +104,29 @@ export default class NodeStatus {
     onServerBanned: [],
     onServerConnected: [],
     onServerDisconnected: [],
-    onServerFinish: [],
+    onServerFinish: []
   };
 
   public servers: Record<string, ServerItem> = {};
+
+  public historyMap = new Map<string, BandwidthHistoryPoint[]>();
+
+  public resourceHistoryMap = new Map<string, ResourceHistoryPoint[]>();
+
+  private historyAggregateMap = new Map<string, HistoryAggregate>();
+
+  private trafficMap = new Map<string, TrafficTotals>();
+
+  private lastActiveMap = new Map<string, number>();
+
+  private isHistoryFlushing = false;
 
   public serversPub: ServerItem[] = [];
 
   constructor(server: Server, options: Options) {
     this.server = server;
     this.options = options;
+    nodeStatusInstance = this;
     emitter.on('update', this.updateStatus.bind(this));
   }
 
@@ -106,20 +159,150 @@ export default class NodeStatus {
     try {
       const fns = this.callbackFn[hook];
       for (const fn of fns) fn.apply(this, args);
-    }
-    catch (error: any) {
+    } catch (error: any) {
       logger.error(`[hook]: ${hook} error: ${error.message || error}`);
     }
   }
 
   private setBan(socket: WebSocket, address: string, t: number, reason: string): void {
     socket.close();
-    if (this.isBanned.get(address))
-      return;
+    if (this.isBanned.get(address)) return;
     this.isBanned.set(address, true);
     loggerBanned.debug('Address:', address, '|', 'Reason:', reason);
     this.callHook('onServerBanned', socket, address, reason);
     setTimeout(() => this.isBanned.delete(address), t * 1000);
+  }
+
+  private pushHistoryPoint(username: string, point: BandwidthHistoryPoint): void {
+    if (!this.historyMap.has(username)) {
+      this.historyMap.set(username, []);
+    }
+
+    const arr = this.historyMap.get(username)!;
+    arr.push(point);
+    if (arr.length > MAX_HISTORY_POINTS) arr.shift();
+  }
+
+  private pushResourceHistoryPoint(username: string, point: ResourceHistoryPoint): void {
+    if (!this.resourceHistoryMap.has(username)) {
+      this.resourceHistoryMap.set(username, []);
+    }
+
+    const arr = this.resourceHistoryMap.get(username)!;
+    arr.push(point);
+    if (arr.length > MAX_HISTORY_POINTS) arr.shift();
+  }
+
+  private getTrafficDelta(username: string, status: ServerItem['status']): TrafficTotals {
+    const current = {
+      rx: toNumber(status.network_rx),
+      tx: toNumber(status.network_tx)
+    };
+    const previous = this.trafficMap.get(username);
+    this.trafficMap.set(username, current);
+    if (!previous) return { rx: 0, tx: 0 };
+    return {
+      rx: current.rx >= previous.rx ? current.rx - previous.rx : 0,
+      tx: current.tx >= previous.tx ? current.tx - previous.tx : 0
+    };
+  }
+
+  private updateHistoryAggregate(username: string, status: ServerItem['status'], point: BandwidthHistoryPoint): void {
+    const serverId = this.servers[username]?.id;
+    if (!serverId) return;
+
+    const aggregate = this.historyAggregateMap.get(username) || {
+      server_id: serverId,
+      time: point.time,
+      cpu: 0,
+      memory_used: 0,
+      memory_total: 0,
+      network_in: 0,
+      network_out: 0,
+      network_rx: 0,
+      network_tx: 0,
+      count: 0
+    };
+
+    aggregate.server_id = serverId;
+    aggregate.time = point.time;
+    aggregate.cpu += toNumber(status.cpu);
+    aggregate.memory_used += toNumber(status.memory_used);
+    aggregate.memory_total += toNumber(status.memory_total);
+    aggregate.network_in += point.in ?? 0;
+    aggregate.network_out += point.out ?? 0;
+    aggregate.network_rx += point.rx ?? 0;
+    aggregate.network_tx += point.tx ?? 0;
+    aggregate.count += 1;
+
+    this.historyAggregateMap.set(username, aggregate);
+  }
+
+  private sampleHistory(): void {
+    const now = Date.now();
+    for (const username of this.userMap.keys()) {
+      const status = this.servers[username]?.status;
+      if (!status) continue;
+      if (
+        status.network_in === undefined
+        && status.network_out === undefined
+        && status.network_rx === undefined
+        && status.network_tx === undefined
+      ) continue;
+
+      const traffic = this.getTrafficDelta(username, status);
+      const point = {
+        time: now,
+        in: toNumber(status.network_in),
+        out: toNumber(status.network_out),
+        rx: traffic.rx,
+        tx: traffic.tx
+      };
+
+      this.pushHistoryPoint(username, point);
+      this.pushResourceHistoryPoint(username, {
+        time: now,
+        cpu: toNumber(status.cpu),
+        memory_used: toNumber(status.memory_used),
+        memory_total: toNumber(status.memory_total),
+        network_in: point.in,
+        network_out: point.out,
+        network_rx: point.rx,
+        network_tx: point.tx
+      });
+      this.updateHistoryAggregate(username, status, point);
+    }
+  }
+
+  private async flushHistory(): Promise<void> {
+    if (this.isHistoryFlushing) return;
+    const entries = Array.from(this.historyAggregateMap.entries()).filter(([, item]) => item.count > 0);
+    if (!entries.length) return;
+
+    this.isHistoryFlushing = true;
+    try {
+      await createServerHistory(entries.map(([, item]) => ({
+        server_id: item.server_id,
+        created_at: new Date(item.time),
+        cpu: item.cpu / item.count,
+        memory_used: item.memory_used / item.count,
+        memory_total: item.memory_total / item.count,
+        network_in: item.network_in / item.count,
+        network_out: item.network_out / item.count,
+        network_rx: item.network_rx,
+        network_tx: item.network_tx
+      })));
+
+      for (const [username, item] of entries) {
+        if (this.historyAggregateMap.get(username) === item) {
+          this.historyAggregateMap.delete(username);
+        }
+      }
+    } catch (error: any) {
+      logger.error(`Failed to persist history: ${error.message || error}`);
+    } finally {
+      this.isHistoryFlushing = false;
+    }
   }
 
   public launch(): Promise<void> {
@@ -135,13 +318,11 @@ export default class NodeStatus {
           ws.ipAddress = (request.headers['x-forwarded-for'] as any)?.split(',')?.[0]?.trim() || request.socket.remoteAddress;
           this.ioConn.emit('connection', ws);
         });
-      }
-      else if (pathname === '/public') {
-        this.ioPub.handleUpgrade(request, socket, head, (ws) => {
+      } else if (pathname === '/public') {
+        this.ioPub.handleUpgrade(request, socket, head, ws => {
           this.ioPub.emit('connection', ws);
         });
-      }
-      else {
+      } else {
         socket.destroy();
       }
     });
@@ -159,8 +340,8 @@ export default class NodeStatus {
           socket.send('You are banned. Please try connecting after 60 / 120 seconds');
           return socket.close();
         }
-        let username = '';
-        let password = '';
+        let username = '',
+          password = '';
         try {
           ({ username, password } = decode(buf) as any);
           username = username.trim();
@@ -184,8 +365,7 @@ export default class NodeStatus {
                 preSocket.status = 1;
                 socket.status = 2;
                 preSocket.terminate();
-              }
-              else {
+              } else {
                 preSocket.isAlive = false;
                 preSocket.ping();
                 const ac = new AbortController();
@@ -195,13 +375,12 @@ export default class NodeStatus {
                   await promise;
                   socket.send('Only one connection per user allowed.');
                   return this.setBan(socket, address, 120, 'Only one connection per user allowed.');
-                }
-                catch { }
+                  // eslint-disable-next-line no-empty
+                } catch (error: any) { }
               }
             }
           }
-        }
-        catch {
+        } catch (error: any) {
           socket.send('Please check your login details.');
           return this.setBan(socket, address, 120, 'it is an idiot.');
         }
@@ -213,9 +392,11 @@ export default class NodeStatus {
         socket.send(`You are connecting via: ${ipType}`);
         loggerConnected.info(`Username: ${username} | Address: ${address}`);
         socket.on('message', (buf: Buffer) => {
-          if (this.servers[username]) {
-            this.servers[username].status = decode(buf) as ServerItem['status'];
-          }
+          const server = this.servers[username];
+          if (!server) return;
+          server.status = decode(buf) as ServerItem['status'];
+          server.last_active = Math.floor(Date.now() / 1000);
+          this.lastActiveMap.set(username, server.last_active);
         });
         this.userMap.set(username, socket);
 
@@ -223,8 +404,7 @@ export default class NodeStatus {
         if (timer) {
           clearTimeout(timer);
           this.timerMap.delete(username);
-        }
-        else if (socket.status !== 2) {
+        } else if (socket.status !== 2) {
           this.callHook('onServerConnected', socket, username);
         }
 
@@ -235,6 +415,25 @@ export default class NodeStatus {
 
           this.userMap.delete(username);
           this.servers[username] && (this.servers[username].status = {});
+          this.trafficMap.delete(username);
+          const time = Date.now();
+          this.pushHistoryPoint(username, {
+            time,
+            in: null,
+            out: null,
+            rx: null,
+            tx: null
+          });
+          this.pushResourceHistoryPoint(username, {
+            time,
+            cpu: null,
+            memory_used: null,
+            memory_total: null,
+            network_in: null,
+            network_out: null,
+            network_rx: null,
+            network_tx: null
+          });
           loggerDisconnected.warn(`Username: ${username} | Address: ${address}`);
 
           this.callHook('onServerDisconnected', socket, username);
@@ -249,17 +448,22 @@ export default class NodeStatus {
       });
     });
 
-    this.ioPub.on('connection', (socket) => {
+    this.ioPub.on('connection', socket => {
       const runPush = () => socket.send(
         JSON.stringify({
           servers: this.serversPub,
-          updated: ~~(Date.now() / 1000),
-        }),
+          updated: ~~(Date.now() / 1000)
+        })
       );
       runPush();
       const id = setInterval(runPush, interval);
       socket.on('close', () => clearInterval(id));
     });
+
+    setInterval(() => this.sampleHistory(), HISTORY_SAMPLE_INTERVAL);
+    setInterval(() => this.flushHistory(), HISTORY_FLUSH_INTERVAL);
+    pruneHistory();
+    setInterval(pruneHistory, HISTORY_TTL_INTERVAL);
 
     return this.updateStatus();
   }
@@ -267,23 +471,41 @@ export default class NodeStatus {
   private async updateStatus(username?: string, shouldDisconnect = false): Promise<void> {
     if (username) {
       const server = (await getServer(username)).data as BoxItem | null;
-      if (!server)
+      if (!server) {
         delete this.servers[username];
-      else this.servers[username] = Object.assign(server, { status: this.servers?.[username]?.status || {} });
+        this.historyMap.delete(username);
+        this.resourceHistoryMap.delete(username);
+        this.historyAggregateMap.delete(username);
+        this.trafficMap.delete(username);
+        this.lastActiveMap.delete(username);
+      } else {
+        const lastActive = this.lastActiveMap.get(username);
+        this.servers[username] = Object.assign(server, {
+          status: this.servers?.[username]?.status || {},
+          username,
+          ...(lastActive === undefined ? {} : { last_active: lastActive })
+        });
+      }
       shouldDisconnect && this.userMap.get(username)?.terminate() && this.userMap.delete(username);
-    }
-    else {
+    } else {
       const box = (await getListServers()).data as Box | null;
-      if (!box)
-        return;
+      if (!box) return;
       for (const k of Object.keys(box)) {
-        if (!this.servers[k])
-          this.servers[k] = Object.assign(box[k], { status: {} });
+        if (!this.servers[k]) this.servers[k] = Object.assign(box[k], { status: {}, username: k });
         this.servers[k].order = box[k].order;
+        const lastActive = this.lastActiveMap.get(k);
+        if (lastActive === undefined) delete this.servers[k].last_active;
+        else this.servers[k].last_active = lastActive;
       }
       for (const k of Object.keys(this.servers)) {
-        if (!box[k])
+        if (!box[k]) {
           delete this.servers[k];
+          this.historyMap.delete(k);
+          this.resourceHistoryMap.delete(k);
+          this.historyAggregateMap.delete(k);
+          this.trafficMap.delete(k);
+          this.lastActiveMap.delete(k);
+        }
       }
       if (shouldDisconnect) {
         for (const socket of this.userMap.values()) {

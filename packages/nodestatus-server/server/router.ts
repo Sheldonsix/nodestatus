@@ -3,9 +3,11 @@ import { createSession, verifySession } from './controller/user';
 import {
   addServer,
   getListServers,
+  getServerHistory,
   modifyOrder,
   queryConfig,
   queryEvents,
+  queryStatus,
   removeEvent,
   removeServer,
   setServer,
@@ -27,7 +29,9 @@ adminApi.delete('/servers/:username', removeServer);
 adminApi.get('/events', queryEvents);
 adminApi.delete('/events/:id?', removeEvent);
 
-/* Web public config */
+/* Web public endpoints */
 webApi.get('/config', queryConfig);
+webApi.get('/status', queryStatus);
+webApi.get('/server/:username/history', getServerHistory);
 
 export { adminApi, webApi };

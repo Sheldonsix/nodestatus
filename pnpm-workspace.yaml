@@ -15,8 +15,12 @@ allowBuilds:
   bufferutil: true
   esbuild: true
   prisma: true
+  vue-demi: true
+  vue-echarts: true
 
 onlyBuiltDependencies:
   - better-sqlite3
   - prisma
   - '@prisma/engines'
+  - vue-demi
+  - vue-echarts

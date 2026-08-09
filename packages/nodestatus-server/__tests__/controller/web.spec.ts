@@ -1,13 +1,26 @@
 import type { Context } from 'hono';
-import { afterEach, expect, it, vi } from 'vitest';
+import type { BandwidthHistoryPoint, ResourceHistoryPoint } from '../../types/server';
+import {
+  afterEach,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 import {
   addServer,
+  downsampleHistoryData,
+  downsampleResourceHistoryData,
   getListServers,
+  mergeHistoryData,
   modifyOrder,
+  parseHistoryMetric,
+  parseHistoryRange,
   queryConfig,
   queryEvents,
+  queryStatus,
   removeEvent,
   removeServer,
+  resolveHistoryStep,
   setServer,
 } from '../../server/controller/web';
 import { deleteAllEvents, deleteEvent, readEvents } from '../../server/model/event';
@@ -19,11 +32,17 @@ import {
   updateServer,
 } from '../../server/model/server';
 
+vi.mock('../../server/lib/core', () => ({
+  nodeStatusInstance: undefined,
+}));
 vi.mock('../../server/model/server');
 vi.mock('../../server/model/event');
+vi.mock('../../server/model/history');
+
+const baseTime = 1700000000000;
 
 function mockContext(jsonBody: any = {}, queryParams: any = {}, routeParams: any = {}) {
-  const c = {
+  return {
     req: {
       json: vi.fn().mockResolvedValue(jsonBody),
       query: vi.fn().mockImplementation(key => queryParams[key]),
@@ -31,14 +50,64 @@ function mockContext(jsonBody: any = {}, queryParams: any = {}, routeParams: any
     },
     json: vi.fn().mockImplementation((data, status) => ({ body: data, status: status || 200 })),
   } as unknown as Context;
-  return c;
 }
 
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
-it('getListServers', async () => {
+const createPoint = (seconds: number, input: number | null, output: number | null): BandwidthHistoryPoint => ({
+  time: baseTime + seconds * 1000,
+  in: input,
+  out: output,
+});
+
+const createRawPoint = (
+  seconds: number,
+  input: number | null,
+  output: number | null,
+  rx: number | null,
+  tx: number | null,
+): BandwidthHistoryPoint => ({
+  time: baseTime + seconds * 1000,
+  in: input,
+  out: output,
+  rx,
+  tx,
+});
+
+const createResourcePoint = (
+  seconds: number,
+  cpu: number,
+  memoryUsed: number,
+  memoryTotal: number,
+  networkIn: number,
+  networkOut: number,
+  networkRx: number,
+  networkTx: number,
+): ResourceHistoryPoint => ({
+  time: baseTime + seconds * 1000,
+  cpu,
+  memory_used: memoryUsed,
+  memory_total: memoryTotal,
+  network_in: networkIn,
+  network_out: networkOut,
+  network_rx: networkRx,
+  network_tx: networkTx,
+});
+
+const createResourceGap = (seconds: number): ResourceHistoryPoint => ({
+  time: baseTime + seconds * 1000,
+  cpu: null,
+  memory_used: null,
+  memory_total: null,
+  network_in: null,
+  network_out: null,
+  network_rx: null,
+  network_tx: null,
+});
+
+test('getListServers', async () => {
   const mockServers = [{ order: 1, name: 'srv1' }, { order: 2, name: 'srv2' }] as any;
   vi.mocked(readServersList).mockResolvedValueOnce(mockServers);
 
@@ -46,11 +115,10 @@ it('getListServers', async () => {
   const res: any = await getListServers(c);
 
   expect(readServersList).toHaveBeenCalled();
-  // sorted by order descending: srv2 (order 2) then srv1 (order 1)
   expect(res.body).toEqual({ code: 0, data: [{ order: 2, name: 'srv2' }, { order: 1, name: 'srv1' }], msg: 'ok' });
 });
 
-it('setServer success', async () => {
+test('setServer success', async () => {
   vi.mocked(updateServer).mockResolvedValueOnce(undefined as any);
   const c = mockContext({ username: 'srv1', data: { username: 'srv1', name: 'newname' } });
   const res: any = await setServer(c);
@@ -59,7 +127,7 @@ it('setServer success', async () => {
   expect(res.body).toEqual({ code: 0, data: null, msg: 'ok' });
 });
 
-it('addServer bulk', async () => {
+test('addServer bulk', async () => {
   vi.mocked(bulkCreateServer).mockResolvedValueOnce(undefined as any);
   const c = mockContext({ data: JSON.stringify([{ username: 'srv1' }]) });
   const res: any = await addServer(c);
@@ -68,7 +136,7 @@ it('addServer bulk', async () => {
   expect(res.body).toEqual({ code: 0, data: null, msg: 'ok' });
 });
 
-it('removeServer', async () => {
+test('removeServer', async () => {
   vi.mocked(deleteServer).mockResolvedValueOnce(undefined as any);
   const c = mockContext({}, {}, { username: 'srv1' });
   const res: any = await removeServer(c);
@@ -77,7 +145,7 @@ it('removeServer', async () => {
   expect(res.body).toEqual({ code: 0, data: null, msg: 'ok' });
 });
 
-it('modifyOrder', async () => {
+test('modifyOrder', async () => {
   vi.mocked(updateOrder).mockResolvedValueOnce(undefined as any);
   const c = mockContext({ order: [1, 2, 3] });
   const res: any = await modifyOrder(c);
@@ -86,7 +154,7 @@ it('modifyOrder', async () => {
   expect(res.body).toEqual({ code: 0, data: null, msg: 'ok' });
 });
 
-it('queryEvents', async () => {
+test('queryEvents', async () => {
   vi.mocked(readEvents).mockResolvedValueOnce([1, [{ id: 1 }]] as any);
   const c = mockContext({}, { size: '5', offset: '2' });
   const res: any = await queryEvents(c);
@@ -95,7 +163,7 @@ it('queryEvents', async () => {
   expect(res.body).toEqual({ code: 0, data: { count: 1, list: [{ id: 1 }] }, msg: 'ok' });
 });
 
-it('removeEvent single', async () => {
+test('removeEvent single', async () => {
   vi.mocked(deleteEvent).mockResolvedValueOnce(undefined as any);
   const c = mockContext({}, {}, { id: '123' });
   const res: any = await removeEvent(c);
@@ -104,7 +172,7 @@ it('removeEvent single', async () => {
   expect(res.body).toEqual({ code: 0, data: null, msg: 'ok' });
 });
 
-it('removeEvent all', async () => {
+test('removeEvent all', async () => {
   vi.mocked(deleteAllEvents).mockResolvedValueOnce(undefined as any);
   const c = mockContext({}, {}, {});
   const res: any = await removeEvent(c);
@@ -113,8 +181,157 @@ it('removeEvent all', async () => {
   expect(res.body).toEqual({ code: 0, data: null, msg: 'ok' });
 });
 
-it('queryConfig', async () => {
+test('queryConfig', async () => {
   const c = mockContext();
   const res: any = await queryConfig(c);
   expect(res.body).toHaveProperty('title');
+});
+
+test('query public status in websocket payload shape', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(baseTime);
+  const c = mockContext();
+  const res: any = await queryStatus(c);
+  expect(res.body).toEqual({
+    servers: [],
+    updated: 1700000000,
+  });
+});
+
+test('resolve bandwidth history step by selected range', () => {
+  expect(resolveHistoryStep(60)).toBe(2);
+  expect(resolveHistoryStep(600)).toBe(10);
+  expect(resolveHistoryStep(1800)).toBe(30);
+  expect(resolveHistoryStep(3600)).toBe(60);
+});
+
+test('parse bandwidth history range with defaults and max range', () => {
+  expect(parseHistoryRange(undefined)).toBe(3600);
+  expect(parseHistoryRange('600')).toBe(600);
+  expect(parseHistoryRange(['1800'])).toBe(1800);
+  expect(parseHistoryRange('-1')).toBe(3600);
+  expect(parseHistoryRange('9999999')).toBe(2592000);
+});
+
+test('parse history metric with bandwidth as default', () => {
+  expect(parseHistoryMetric(undefined)).toBe('bandwidth');
+  expect(parseHistoryMetric('bandwidth')).toBe('bandwidth');
+  expect(parseHistoryMetric('traffic')).toBe('traffic');
+  expect(parseHistoryMetric('resource')).toBe('resource');
+  expect(parseHistoryMetric(['traffic'])).toBe('traffic');
+  expect(parseHistoryMetric('unknown')).toBe('bandwidth');
+});
+
+test('merge stored history before newer memory points', () => {
+  expect(mergeHistoryData(
+    [createPoint(10, 10, 20), createPoint(20, 30, 40)],
+    [createPoint(18, 1, 2), createPoint(22, 50, 60)],
+  )).toEqual([
+    createPoint(10, 10, 20),
+    createPoint(20, 30, 40),
+    createPoint(22, 50, 60),
+  ]);
+});
+
+test('merge stored resource history before newer memory points', () => {
+  const stored = [createResourcePoint(10, 10, 100, 1000, 1, 2, 100, 200)];
+  const memory = [
+    createResourcePoint(8, 1, 10, 1000, 1, 1, 10, 10),
+    createResourcePoint(12, 20, 200, 1000, 3, 4, 300, 400),
+  ];
+
+  expect(downsampleResourceHistoryData(mergeHistoryData(stored, memory), 60)).toEqual([
+    stored[0],
+    memory[1],
+  ]);
+});
+
+test('downsample bandwidth history by averaging each bucket', () => {
+  const history = [
+    createPoint(0, 10, 20),
+    createPoint(2, 30, 40),
+    createPoint(4, 50, 60),
+    createPoint(10, 100, 200),
+    createPoint(12, 120, 240),
+  ];
+
+  expect(downsampleHistoryData(history, 600)).toEqual([
+    createPoint(4, 30, 40),
+    createPoint(12, 110, 220),
+  ]);
+});
+
+test('downsample bandwidth history preserves disconnect gaps', () => {
+  const history = [
+    createPoint(0, 10, 20),
+    createPoint(2, 20, 40),
+    createPoint(4, null, null),
+    createPoint(6, 30, 60),
+    createPoint(8, 40, 80),
+  ];
+
+  expect(downsampleHistoryData(history, 600)).toEqual([
+    createPoint(2, 15, 30),
+    createPoint(4, null, null),
+    createPoint(8, 35, 70),
+  ]);
+});
+
+test('downsample bandwidth history keeps only points in range', () => {
+  const history = [
+    createPoint(0, 10, 20),
+    createPoint(70, 30, 40),
+    createPoint(72, 50, 60),
+  ];
+
+  expect(downsampleHistoryData(history, 60)).toEqual([
+    createPoint(70, 30, 40),
+    createPoint(72, 50, 60),
+  ]);
+});
+
+test('downsample traffic history by summing each bucket', () => {
+  const history = [
+    createRawPoint(0, 10, 20, 1000, 2000),
+    createRawPoint(2, 30, 40, 2000, 3000),
+    createRawPoint(4, 50, 60, 3000, 4000),
+    createRawPoint(10, 100, 200, 4000, 5000),
+    createRawPoint(12, 120, 240, 5000, 6000),
+  ];
+
+  expect(downsampleHistoryData(history, 600, 'traffic')).toEqual([
+    createPoint(4, 6000, 9000),
+    createPoint(12, 9000, 11000),
+  ]);
+});
+
+test('downsample traffic history preserves disconnect gaps', () => {
+  const history = [
+    createRawPoint(0, 10, 20, 1000, 2000),
+    createRawPoint(2, 20, 40, 2000, 4000),
+    createRawPoint(4, null, null, null, null),
+    createRawPoint(6, 30, 60, 3000, 6000),
+    createRawPoint(8, 40, 80, 4000, 8000),
+  ];
+
+  expect(downsampleHistoryData(history, 600, 'traffic')).toEqual([
+    createPoint(2, 3000, 6000),
+    createPoint(4, null, null),
+    createPoint(8, 7000, 14000),
+  ]);
+});
+
+test('downsample resource history averages samples, sums traffic, and preserves gaps', () => {
+  const history = [
+    createResourcePoint(0, 10, 100, 1000, 1, 2, 100, 200),
+    createResourcePoint(2, 20, 200, 1000, 3, 4, 300, 400),
+    createResourceGap(4),
+    createResourcePoint(6, 30, 300, 1200, 5, 6, 500, 600),
+    createResourcePoint(8, 50, 500, 1200, 7, 8, 700, 800),
+  ];
+
+  expect(downsampleResourceHistoryData(history, 600)).toEqual([
+    createResourcePoint(2, 15, 150, 1000, 2, 3, 400, 600),
+    createResourceGap(4),
+    createResourcePoint(8, 40, 400, 1200, 6, 7, 1200, 1400),
+  ]);
 });

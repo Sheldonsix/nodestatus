@@ -282,7 +282,9 @@ npm i pnpm -g
 git clone https://github.com/cokemine/nodestatus.git
 cd nodestatus
 pnpm install
-pnpm dev
+mkdir -p ~/.nodestatus
+DATABASE="file:$HOME/.nodestatus/db.sqlite" WEB_PASSWORD=123456 pnpm --filter=nodestatus-server run prestart
+DATABASE="file:$HOME/.nodestatus/db.sqlite" WEB_PASSWORD=123456 pnpm dev
 ```
 
 ## CLI Options

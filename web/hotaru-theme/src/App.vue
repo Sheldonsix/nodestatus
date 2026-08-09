@@ -1,15 +1,27 @@
+<template>
+  <global-context>
+    <the-header />
+    <the-error v-show="!servers" />
+    <div class="container">
+      <servers-table :servers="servers" />
+      <update-time :updated="updated" />
+      <servers-card :servers="servers" />
+    </div>
+    <the-footer />
+  </global-context>
+</template>
+
 <script lang="ts">
-import type { ServerItem } from './types';
-import GlobalContext from '@nodestatus/web-utils/vue/components/GlobalContext.vue';
+import { defineComponent, ref, onBeforeUnmount } from 'vue';
 
 import TheError from '@nodestatus/web-utils/vue/components/TheError.vue';
 import UpdateTime from '@nodestatus/web-utils/vue/components/UpdateTime.vue';
-import WebSocket from 'reconnecting-websocket';
-import { defineComponent, onBeforeUnmount, ref } from 'vue';
-import ServersCard from './components/ServersCard.vue';
-import ServersTable from './components/ServersTable.vue';
-import TheFooter from './components/TheFooter.vue';
+import GlobalContext from '@nodestatus/web-utils/vue/components/GlobalContext.vue';
 import TheHeader from './components/TheHeader.vue';
+import ServersTable from './components/ServersTable.vue';
+import ServersCard from './components/ServersCard.vue';
+import TheFooter from './components/TheFooter.vue';
+import type { ServerItem } from './types';
 
 /* Semantic UI Style */
 import 'semantic-ui-css/semantic.min.css';
@@ -23,41 +35,32 @@ export default defineComponent({
     ServersCard,
     TheFooter,
     UpdateTime,
-    GlobalContext,
+    GlobalContext
   },
   setup() {
     const servers = ref<Array<ServerItem>>();
     const updated = ref<number>();
-    const ws = new WebSocket(`${document.location.protocol.replace('http', 'ws')}${window.location.host}/public`);
-    ws.onopen = () => console.info('Connect to backend successfully!');
-    ws.onclose = () => console.warn('WebSocket disconnected!');
-    ws.onerror = () => console.error('An error occurred while connecting to the backend');
-    ws.onmessage = (evt) => {
-      const data = JSON.parse(evt.data);
+
+    const loadStatus = async () => {
+      const resp = await fetch('/api/status');
+      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+      const data = await resp.json() as { servers: Array<ServerItem>, updated: number };
       servers.value = data.servers;
       updated.value = data.updated;
     };
-    onBeforeUnmount(ws.close);
+    const pollStatus = () => loadStatus().catch(error => console.error('An error occurred while connecting to the backend', error));
+
+    pollStatus();
+    const id = window.setInterval(pollStatus, 1500);
+    onBeforeUnmount(() => clearInterval(id));
+
     return {
       servers,
-      updated,
+      updated
     };
-  },
+  }
 });
 </script>
-
-<template>
-  <GlobalContext>
-    <TheHeader />
-    <TheError v-show="!servers" />
-    <div class="container">
-      <ServersTable :servers="servers" />
-      <UpdateTime :updated="updated" />
-      <ServersCard :servers="servers" />
-    </div>
-    <TheFooter />
-  </GlobalContext>
-</template>
 
 <style>
 body {
@@ -68,6 +71,88 @@ body {
 /* Global */
 div.bar {
   min-width: 0 !important;
+}
+
+body.dark-mode {
+  background: #141414;
+  color: #e8eaed;
+}
+
+body.dark-mode #app {
+  min-height: 100vh;
+}
+
+body.dark-mode #table {
+  background: rgba(23, 23, 23, .88);
+  color: #e8eaed;
+}
+
+body.dark-mode #table thead tr th {
+  color: #bfc8c2;
+}
+
+body.dark-mode #table.ui.basic.table tbody tr,
+body.dark-mode #table tr.tableRow {
+  background-color: rgba(32, 33, 36, .9);
+}
+
+body.dark-mode #table.ui.basic.table tbody tr:hover,
+body.dark-mode #table tr.tableRow:hover {
+  background-color: rgba(49, 50, 54, .94);
+}
+
+body.dark-mode #table.ui.table tr td,
+body.dark-mode #table tr td {
+  color: #e8eaed;
+  border-color: rgba(191, 200, 194, .22) !important;
+}
+
+body.dark-mode #table .expandRow td > div {
+  color: #cfd8d3;
+}
+
+body.dark-mode #cards .card__wrapper .ui.card {
+  background-color: rgba(32, 33, 36, .92);
+  box-shadow: 5px 5px 25px 0 rgba(0, 0, 0, .32);
+  color: #e8eaed;
+}
+
+body.dark-mode #cards .card__wrapper .ui.card .card__header p,
+body.dark-mode #cards .card__wrapper .ui.card .card__content p {
+  color: #cfd8d3;
+}
+
+body.dark-mode #cards .card__wrapper .ui.card .card__content p:last-child {
+  color: #66b7ff !important;
+}
+
+body.dark-mode .bandwidth-chart {
+  color: #cfd8d3;
+}
+
+body.dark-mode .bandwidth-chart .chart-controls button {
+  border-color: rgba(191, 200, 194, .42);
+  background: rgba(20, 20, 20, .9);
+  color: #cfd8d3;
+}
+
+body.dark-mode .bandwidth-chart .chart-controls button.active {
+  border-color: #66b7ff;
+  background: #1f6feb;
+  color: #fff;
+}
+
+body.dark-mode .updated,
+body.dark-mode .footer p {
+  color: #cfd8d3;
+}
+
+body.dark-mode .footer p a {
+  color: #8cc8ff;
+}
+
+body.dark-mode .footer p a:hover {
+  color: #ff9fc4;
 }
 
 /* Responsive */
