@@ -9,11 +9,11 @@ import {
 } from '../model/server';
 import { createRes } from '../lib/utils';
 import { deleteAllEvents, deleteEvent, readEvents } from '../model/event';
-import { readServerHistory } from '../model/history';
+import { readServerHistory, readServerResourceHistory } from '../model/history';
 import config from '../lib/config';
 
 import { nodeStatusInstance } from '../lib/core';
-import type { BandwidthHistoryPoint } from '../../types/server';
+import type { BandwidthHistoryPoint, ResourceHistoryPoint } from '../../types/server';
 
 const DEFAULT_HISTORY_RANGE = 3600;
 const MAX_HISTORY_RANGE = 30 * 24 * 3600;
@@ -27,13 +27,29 @@ const HISTORY_STEPS = [
   { range: MAX_HISTORY_RANGE, step: 3600 }
 ];
 
-type HistoryMetric = 'bandwidth' | 'traffic';
+type HistoryMetric = 'bandwidth' | 'traffic' | 'resource';
 
 type HistoryBucket = {
   key: number;
   time: number;
   in: number;
   out: number;
+  count: number;
+};
+
+type ResourceHistorySample = ResourceHistoryPoint & {
+  cpu: number;
+  memory_used: number;
+  memory_total: number;
+  network_in: number;
+  network_out: number;
+  network_rx: number;
+  network_tx: number;
+};
+
+type ResourceHistoryBucket = Omit<ResourceHistorySample, 'time'> & {
+  key: number;
+  time: number;
   count: number;
 };
 
@@ -59,6 +75,7 @@ function resolveHistoryStep(range: number): number {
 
 function parseHistoryMetric(value: unknown): HistoryMetric {
   const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === 'resource') return 'resource';
   return raw === 'traffic' ? 'traffic' : 'bandwidth';
 }
 
@@ -72,7 +89,7 @@ function createMetricPoint(item: BandwidthHistoryPoint, metric: HistoryMetric): 
   return { time: item.time, in: input, out: output };
 }
 
-function mergeHistoryData(stored: BandwidthHistoryPoint[], memory: BandwidthHistoryPoint[]): BandwidthHistoryPoint[] {
+function mergeHistoryData<T extends { time: number }>(stored: T[], memory: T[]): T[] {
   const lastStoredTime = stored[stored.length - 1]?.time || 0;
   return stored.concat(memory.filter(item => item.time > lastStoredTime)).sort((x, y) => x.time - y.time);
 }
@@ -134,6 +151,97 @@ function downsampleHistoryData(
       bucket.out += output;
       bucket.count += 1;
     }
+  }
+
+  flushBucket();
+  return data;
+}
+
+function createResourceGapPoint(time: number): ResourceHistoryPoint {
+  return {
+    time,
+    cpu: null,
+    memory_used: null,
+    memory_total: null,
+    network_in: null,
+    network_out: null,
+    network_rx: null,
+    network_tx: null
+  };
+}
+
+function hasResourceValues(item: ResourceHistoryPoint): item is ResourceHistorySample {
+  return item.cpu !== null
+    && item.memory_used !== null
+    && item.memory_total !== null
+    && item.network_in !== null
+    && item.network_out !== null
+    && item.network_rx !== null
+    && item.network_tx !== null;
+}
+
+function downsampleResourceHistoryData(history: ResourceHistoryPoint[], range: number): ResourceHistoryPoint[] {
+  if (!history.length) return [];
+
+  const step = resolveHistoryStep(range);
+  const cutoff = history[history.length - 1].time - range * 1000;
+  const filtered = history.filter(item => item.time >= cutoff);
+
+  if (step <= 2) return filtered;
+
+  const stepMs = step * 1000;
+  const data: ResourceHistoryPoint[] = [];
+  let bucket: ResourceHistoryBucket | null = null;
+
+  const flushBucket = () => {
+    if (!bucket) return;
+    data.push({
+      time: bucket.time,
+      cpu: bucket.cpu / bucket.count,
+      memory_used: bucket.memory_used / bucket.count,
+      memory_total: bucket.memory_total / bucket.count,
+      network_in: bucket.network_in / bucket.count,
+      network_out: bucket.network_out / bucket.count,
+      network_rx: bucket.network_rx,
+      network_tx: bucket.network_tx
+    });
+    bucket = null;
+  };
+
+  for (const item of filtered) {
+    if (!hasResourceValues(item)) {
+      flushBucket();
+      data.push(createResourceGapPoint(item.time));
+      continue;
+    }
+
+    const key = Math.floor(item.time / stepMs);
+    if (!bucket || bucket.key !== key) {
+      flushBucket();
+      bucket = {
+        key,
+        time: item.time,
+        cpu: item.cpu,
+        memory_used: item.memory_used,
+        memory_total: item.memory_total,
+        network_in: item.network_in,
+        network_out: item.network_out,
+        network_rx: item.network_rx,
+        network_tx: item.network_tx,
+        count: 1
+      };
+      continue;
+    }
+
+    bucket.time = item.time;
+    bucket.cpu += item.cpu;
+    bucket.memory_used += item.memory_used;
+    bucket.memory_total += item.memory_total;
+    bucket.network_in += item.network_in;
+    bucket.network_out += item.network_out;
+    bucket.network_rx += item.network_rx;
+    bucket.network_tx += item.network_tx;
+    bucket.count += 1;
   }
 
   flushBucket();
@@ -234,6 +342,11 @@ const getServerHistory: Middleware = async ctx => {
   const metric = parseHistoryMetric(ctx.query.metric);
   await handleRequest(ctx, (async () => {
     const since = Date.now() - range * 1000;
+    if (metric === 'resource') {
+      const stored = await readServerResourceHistory(username, new Date(since));
+      const memory = (nodeStatusInstance?.resourceHistoryMap.get(username) || []).filter(item => item.time >= since);
+      return downsampleResourceHistoryData(mergeHistoryData(stored, memory), range);
+    }
     const stored = await readServerHistory(username, new Date(since));
     const memory = (nodeStatusInstance?.historyMap.get(username) || []).filter(item => item.time >= since);
     return downsampleHistoryData(mergeHistoryData(stored, memory), range, metric);
@@ -242,6 +355,7 @@ const getServerHistory: Middleware = async ctx => {
 
 export {
   downsampleHistoryData,
+  downsampleResourceHistoryData,
   mergeHistoryData,
   getListServers,
   parseHistoryMetric,

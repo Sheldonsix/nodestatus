@@ -3,13 +3,14 @@ import {
 } from 'vitest';
 import {
   downsampleHistoryData,
+  downsampleResourceHistoryData,
   mergeHistoryData,
   parseHistoryMetric,
   parseHistoryRange,
   queryStatus,
   resolveHistoryStep
 } from '../../server/controller/web';
-import type { BandwidthHistoryPoint } from '../../types/server';
+import type { BandwidthHistoryPoint, ResourceHistoryPoint } from '../../types/server';
 
 const baseTime = 1700000000000;
 
@@ -37,6 +38,37 @@ const createRawPoint = (
   tx
 });
 
+const createResourcePoint = (
+  seconds: number,
+  cpu: number,
+  memoryUsed: number,
+  memoryTotal: number,
+  networkIn: number,
+  networkOut: number,
+  networkRx: number,
+  networkTx: number
+): ResourceHistoryPoint => ({
+  time: baseTime + seconds * 1000,
+  cpu,
+  memory_used: memoryUsed,
+  memory_total: memoryTotal,
+  network_in: networkIn,
+  network_out: networkOut,
+  network_rx: networkRx,
+  network_tx: networkTx
+});
+
+const createResourceGap = (seconds: number): ResourceHistoryPoint => ({
+  time: baseTime + seconds * 1000,
+  cpu: null,
+  memory_used: null,
+  memory_total: null,
+  network_in: null,
+  network_out: null,
+  network_rx: null,
+  network_tx: null
+});
+
 test('resolve bandwidth history step by selected range', () => {
   expect(resolveHistoryStep(60)).toBe(2);
   expect(resolveHistoryStep(600)).toBe(10);
@@ -56,6 +88,7 @@ test('parse history metric with bandwidth as default', () => {
   expect(parseHistoryMetric(undefined)).toBe('bandwidth');
   expect(parseHistoryMetric('bandwidth')).toBe('bandwidth');
   expect(parseHistoryMetric('traffic')).toBe('traffic');
+  expect(parseHistoryMetric('resource')).toBe('resource');
   expect(parseHistoryMetric(['traffic'])).toBe('traffic');
   expect(parseHistoryMetric('unknown')).toBe('bandwidth');
 });
@@ -78,6 +111,19 @@ test('merge stored history before newer memory points', () => {
     createPoint(10, 10, 20),
     createPoint(20, 30, 40),
     createPoint(22, 50, 60)
+  ]);
+});
+
+test('merge stored resource history before newer memory points', () => {
+  const stored = [createResourcePoint(10, 10, 100, 1000, 1, 2, 100, 200)];
+  const memory = [
+    createResourcePoint(8, 1, 10, 1000, 1, 1, 10, 10),
+    createResourcePoint(12, 20, 200, 1000, 3, 4, 300, 400)
+  ];
+
+  expect(downsampleResourceHistoryData(mergeHistoryData(stored, memory), 60)).toEqual([
+    stored[0],
+    memory[1]
   ]);
 });
 
@@ -153,5 +199,21 @@ test('downsample traffic history preserves disconnect gaps', () => {
     createPoint(2, 3000, 6000),
     createPoint(4, null, null),
     createPoint(8, 7000, 14000)
+  ]);
+});
+
+test('downsample resource history averages samples, sums traffic, and preserves gaps', () => {
+  const history = [
+    createResourcePoint(0, 10, 100, 1000, 1, 2, 100, 200),
+    createResourcePoint(2, 20, 200, 1000, 3, 4, 300, 400),
+    createResourceGap(4),
+    createResourcePoint(6, 30, 300, 1200, 5, 6, 500, 600),
+    createResourcePoint(8, 50, 500, 1200, 7, 8, 700, 800)
+  ];
+
+  expect(downsampleResourceHistoryData(history, 600)).toEqual([
+    createResourcePoint(2, 15, 150, 1000, 2, 3, 400, 600),
+    createResourceGap(4),
+    createResourcePoint(8, 40, 400, 1200, 6, 7, 1200, 1400)
   ]);
 });

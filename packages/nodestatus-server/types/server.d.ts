@@ -16,6 +16,7 @@ export type IServer = BaseItem & { disabled: boolean };
 export type Box = Record<string, BoxItem>;
 
 export type ServerItem = BaseItem & {
+  last_active?: number;
   status: {
     online4: boolean;
     online6: boolean;
@@ -32,6 +33,21 @@ export type ServerItem = BaseItem & {
     swap_used: number;
     hdd_total: number;
     hdd_used: number;
+    platform?: string;
+    platform_version?: string;
+    arch?: string;
+    virtualization?: string;
+    cpu_info?: string[];
+    gpu_info?: string[];
+    version?: string;
+    load1?: number;
+    load5?: number;
+    load15?: number;
+    tcp_conn_count?: number;
+    udp_conn_count?: number;
+    process_count?: number;
+    temperatures?: number;
+    gpu?: number;
     custom: string;
   } | Record<string, never>;
 };
@@ -42,6 +58,17 @@ export type BandwidthHistoryPoint = {
   out: number | null;
   rx?: number | null;
   tx?: number | null;
+};
+
+export type ResourceHistoryPoint = {
+  time: number;
+  cpu: number | null;
+  memory_used: number | null;
+  memory_total: number | null;
+  network_in: number | null;
+  network_out: number | null;
+  network_rx: number | null;
+  network_tx: number | null;
 };
 
 export type IResp<T = any> = {

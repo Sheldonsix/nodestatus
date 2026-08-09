@@ -14,7 +14,8 @@ import type {
   Box,
   ServerItem,
   BoxItem,
-  IWebSocket
+  IWebSocket,
+  ResourceHistoryPoint
 } from '../../types/server';
 
 const { getLogger } = log4js;
@@ -110,9 +111,13 @@ export default class NodeStatus {
 
   public historyMap = new Map<string, BandwidthHistoryPoint[]>();
 
+  public resourceHistoryMap = new Map<string, ResourceHistoryPoint[]>();
+
   private historyAggregateMap = new Map<string, HistoryAggregate>();
 
   private trafficMap = new Map<string, TrafficTotals>();
+
+  private lastActiveMap = new Map<string, number>();
 
   private isHistoryFlushing = false;
 
@@ -174,6 +179,16 @@ export default class NodeStatus {
     }
 
     const arr = this.historyMap.get(username)!;
+    arr.push(point);
+    if (arr.length > MAX_HISTORY_POINTS) arr.shift();
+  }
+
+  private pushResourceHistoryPoint(username: string, point: ResourceHistoryPoint): void {
+    if (!this.resourceHistoryMap.has(username)) {
+      this.resourceHistoryMap.set(username, []);
+    }
+
+    const arr = this.resourceHistoryMap.get(username)!;
     arr.push(point);
     if (arr.length > MAX_HISTORY_POINTS) arr.shift();
   }
@@ -245,6 +260,16 @@ export default class NodeStatus {
       };
 
       this.pushHistoryPoint(username, point);
+      this.pushResourceHistoryPoint(username, {
+        time: now,
+        cpu: toNumber(status.cpu),
+        memory_used: toNumber(status.memory_used),
+        memory_total: toNumber(status.memory_total),
+        network_in: point.in,
+        network_out: point.out,
+        network_rx: point.rx,
+        network_tx: point.tx
+      });
       this.updateHistoryAggregate(username, status, point);
     }
   }
@@ -366,7 +391,13 @@ export default class NodeStatus {
         }
         socket.send(`You are connecting via: ${ipType}`);
         loggerConnected.info(`Username: ${username} | Address: ${address}`);
-        socket.on('message', (buf: Buffer) => (this.servers[username].status = decode(buf) as ServerItem['status']));
+        socket.on('message', (buf: Buffer) => {
+          const server = this.servers[username];
+          if (!server) return;
+          server.status = decode(buf) as ServerItem['status'];
+          server.last_active = Math.floor(Date.now() / 1000);
+          this.lastActiveMap.set(username, server.last_active);
+        });
         this.userMap.set(username, socket);
 
         const timer = this.timerMap.get(username);
@@ -385,12 +416,23 @@ export default class NodeStatus {
           this.userMap.delete(username);
           this.servers[username] && (this.servers[username].status = {});
           this.trafficMap.delete(username);
+          const time = Date.now();
           this.pushHistoryPoint(username, {
-            time: Date.now(),
+            time,
             in: null,
             out: null,
             rx: null,
             tx: null
+          });
+          this.pushResourceHistoryPoint(username, {
+            time,
+            cpu: null,
+            memory_used: null,
+            memory_total: null,
+            network_in: null,
+            network_out: null,
+            network_rx: null,
+            network_tx: null
           });
           loggerDisconnected.warn(`Username: ${username} | Address: ${address}`);
 
@@ -432,12 +474,16 @@ export default class NodeStatus {
       if (!server) {
         delete this.servers[username];
         this.historyMap.delete(username);
+        this.resourceHistoryMap.delete(username);
         this.historyAggregateMap.delete(username);
         this.trafficMap.delete(username);
+        this.lastActiveMap.delete(username);
       } else {
+        const lastActive = this.lastActiveMap.get(username);
         this.servers[username] = Object.assign(server, {
           status: this.servers?.[username]?.status || {},
-          username
+          username,
+          ...(lastActive === undefined ? {} : { last_active: lastActive })
         });
       }
       shouldDisconnect && this.userMap.get(username)?.terminate() && this.userMap.delete(username);
@@ -447,13 +493,18 @@ export default class NodeStatus {
       for (const k of Object.keys(box)) {
         if (!this.servers[k]) this.servers[k] = Object.assign(box[k], { status: {}, username: k });
         this.servers[k].order = box[k].order;
+        const lastActive = this.lastActiveMap.get(k);
+        if (lastActive === undefined) delete this.servers[k].last_active;
+        else this.servers[k].last_active = lastActive;
       }
       for (const k of Object.keys(this.servers)) {
         if (!box[k]) {
           delete this.servers[k];
           this.historyMap.delete(k);
+          this.resourceHistoryMap.delete(k);
           this.historyAggregateMap.delete(k);
           this.trafficMap.delete(k);
+          this.lastActiveMap.delete(k);
         }
       }
       if (shouldDisconnect) {
