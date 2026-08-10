@@ -117,7 +117,8 @@ function parseInstallationScript(username: string, password: string): string {
   const protocol = document.location.protocol.replace('http', 'ws');
   const { host } = window.location;
   const dsn = `${protocol}//${username || 'USERNAME_YOU_SET'}:${password || 'PASSWORD_YOU_SET'}@${host}`;
-  return `wget -N https://raw.githubusercontent.com/cokemine/nodestatus-client-go/master/install.sh && bash install.sh --dsn ${dsn}`;
+  const quotedDsn = `'${dsn.replace(/'/g, '\'\\\'\'')}'`;
+  return `wget -O /tmp/nodestatus-client-install.sh https://raw.githubusercontent.com/Sheldonsix/nodestatus/master/scripts/install-client-go.sh && sh /tmp/nodestatus-client-install.sh --dsn ${quotedDsn}`;
 }
 
 const Management: FC = () => {

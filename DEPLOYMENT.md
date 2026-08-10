@@ -293,90 +293,75 @@ https://node.example.com/admin
 
 ## 10. 部署 client-go
 
-client-go 当前 `go.mod` 使用 `go 1.26`。节点机可以安装 Go 1.26+ 后本机编译，也可以在其他机器交叉编译后复制二进制。
-
-### 方式 A：节点机本机编译
+GitHub Release 会自动发布 `client-go` 的 Linux/OpenWrt 多架构二进制。推荐直接使用一键安装脚本，它会自动识别架构并配置自启动：
 
 ```bash
-sudo apt update
-sudo apt install -y git
+wget -O /tmp/nodestatus-client-install.sh https://raw.githubusercontent.com/Sheldonsix/nodestatus/master/scripts/install-client-go.sh
+sh /tmp/nodestatus-client-install.sh --dsn 'wss://vps-1:节点密码@node.example.com'
+```
 
+也可以使用拆分参数：
+
+```bash
+sh /tmp/nodestatus-client-install.sh \
+  --server https://node.example.com \
+  --username vps-1 \
+  --password '节点密码' \
+  --custom vps-1
+```
+
+指定版本或架构：
+
+```bash
+sh /tmp/nodestatus-client-install.sh --version v1.2.3 --target linux-amd64 --dsn 'wss://vps-1:节点密码@node.example.com'
+```
+
+常用 target：
+
+```text
+linux-amd64
+linux-386
+linux-arm64
+linux-armv7
+linux-armv6
+linux-armv5
+openwrt-mips
+openwrt-mipsle
+openwrt-mips64
+openwrt-mips64le
+```
+
+需要本机编译时再使用 Go 1.26+：
+
+```bash
 git clone https://github.com/Sheldonsix/nodestatus.git /opt/nodestatus
 cd /opt/nodestatus/client-go
 go build -ldflags="-s -w -X main.version=$(git rev-parse --short HEAD)" -o nodestatus-client .
 sudo install -m 0755 nodestatus-client /usr/local/bin/nodestatus-client
 ```
 
-### 方式 B：本地交叉编译
+## 11. client-go 服务管理
 
-在构建机执行：
-
-```bash
-cd client-go
-GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=$(git rev-parse --short HEAD)" -o nodestatus-client-linux-amd64 .
-```
-
-复制到节点：
+Linux/systemd：
 
 ```bash
-scp nodestatus-client-linux-amd64 root@your-node:/usr/local/bin/nodestatus-client
-ssh root@your-node 'chmod +x /usr/local/bin/nodestatus-client'
+sudo systemctl status nodestatus-client-go
+sudo systemctl restart nodestatus-client-go
+journalctl -u nodestatus-client-go -f
 ```
 
-ARM64 节点使用：
+OpenWrt/procd：
 
 ```bash
-GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=$(git rev-parse --short HEAD)" -o nodestatus-client-linux-arm64 .
+/etc/init.d/nodestatus-client-go status
+/etc/init.d/nodestatus-client-go restart
+logread -f
 ```
 
-## 11. client-go systemd 服务
+配置文件：
 
-在节点上创建配置：
-
-```bash
-sudo mkdir -p /etc/nodestatus-client
-sudo nano /etc/nodestatus-client/client.env
-```
-
-内容：
-
-```env
-NODESTATUS_SERVER=https://node.example.com
-NODESTATUS_USERNAME=vps-1
-NODESTATUS_PASSWORD=节点密码
-NODESTATUS_CUSTOM=vps-1
-```
-
-创建 `/etc/systemd/system/nodestatus-client.service`：
-
-```ini
-[Unit]
-Description=NodeStatus Go Client
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-EnvironmentFile=/etc/nodestatus-client/client.env
-ExecStart=/usr/local/bin/nodestatus-client -server ${NODESTATUS_SERVER} -username ${NODESTATUS_USERNAME} -password ${NODESTATUS_PASSWORD} -custom ${NODESTATUS_CUSTOM} -interval 1.5
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-启动：
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now nodestatus-client
-sudo systemctl status nodestatus-client
-```
-
-查看日志：
-
-```bash
-journalctl -u nodestatus-client -f
+```text
+/etc/nodestatus-client-go/client.env
 ```
 
 ## 12. 升级
@@ -406,12 +391,8 @@ docker compose up -d
 更新 client-go：
 
 ```bash
-cd /opt/nodestatus
-git pull
-cd client-go
-go build -ldflags="-s -w -X main.version=$(git rev-parse --short HEAD)" -o nodestatus-client .
-sudo install -m 0755 nodestatus-client /usr/local/bin/nodestatus-client
-sudo systemctl restart nodestatus-client
+wget -O /tmp/nodestatus-client-install.sh https://raw.githubusercontent.com/Sheldonsix/nodestatus/master/scripts/install-client-go.sh
+sh /tmp/nodestatus-client-install.sh --dsn 'wss://vps-1:节点密码@node.example.com'
 ```
 
 ## 13. 备份和恢复
