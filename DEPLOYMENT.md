@@ -61,35 +61,18 @@ git clone -b feature/adapt-nodestatus https://github.com/Sheldonsix/nezha-dash.g
 
 ## 4. Docker 镜像选择
 
-有两种部署方式。
+推荐使用 GitHub Actions 构建并推送到 Docker Hub，VPS 只拉镜像运行：
 
-### 方式 A：VPS 本地构建
-
-适合首次部署或不想维护镜像仓库：
-
-```yaml
-build:
-  context: ./nodestatus
-image: sheldonsix/nodestatus:local
+```text
+tattoo8098/nodestatus:latest
+tattoo8098/nezha-dash:latest
 ```
 
-这里的 `image: sheldonsix/nodestatus:local` 只是给本机构建出来的镜像起名，不会从 Docker Hub 拉取。
+两个仓库都需要在 GitHub Actions secrets 中配置：
 
-### 方式 B：发布自己的镜像
-
-适合生产环境。先把镜像推到 Docker Hub：
-
-```bash
-cd /opt/monitor/nodestatus
-docker login
-docker build -t sheldonsix/nodestatus:latest .
-docker push sheldonsix/nodestatus:latest
-```
-
-之后 `docker-compose.yml` 可以写成：
-
-```yaml
-image: sheldonsix/nodestatus:latest
+```text
+DOCKER_USERNAME=tattoo8098
+DOCKERHUB_TOKEN=你的 Docker Hub access token
 ```
 
 不能直接使用：
@@ -107,11 +90,7 @@ image: cokemine/nodestatus
 ```yaml
 services:
   nodestatus:
-    build:
-      context: ./nodestatus
-      args:
-        USE_CHINA_MIRROR: 0
-    image: sheldonsix/nodestatus:local
+    image: tattoo8098/nodestatus:latest
     container_name: nodestatus
     restart: unless-stopped
     environment:
@@ -147,9 +126,7 @@ services:
       - "127.0.0.1:35601:35601"
 
   nezha-dash:
-    build:
-      context: ./nezha-dash
-    image: sheldonsix/nezha-dash:local
+    image: tattoo8098/nezha-dash:latest
     container_name: nezha-dash
     restart: unless-stopped
     depends_on:
@@ -169,10 +146,12 @@ services:
       - "127.0.0.1:3040:3000"
 ```
 
-如果你已经按“方式 B”发布了自己的镜像，可以把 `nodestatus` 服务里的 `build` 删除，并改成：
+如果临时需要在 VPS 本地构建，再把对应服务改成：
 
 ```yaml
-image: sheldonsix/nodestatus:latest
+build:
+  context: ./nodestatus
+image: tattoo8098/nodestatus:local
 ```
 
 ## 6. 环境变量
@@ -194,7 +173,7 @@ openssl rand -hex 32
 
 ```bash
 cd /opt/monitor
-docker compose build
+docker compose pull
 docker compose up -d
 docker compose ps
 ```
@@ -212,6 +191,8 @@ curl http://127.0.0.1:3040/api/health
 ```
 
 ## 8. Nginx 反向代理
+
+下面先配置 HTTP 反代。`certbot --nginx` 会在下一步申请证书，并自动把 `listen 443 ssl`、`ssl_certificate` 等 HTTPS 配置写入 Nginx；未执行 certbot 前不能使用 `https://` 或 `wss://`。
 
 创建 `/etc/nginx/sites-available/monitor.conf`：
 
@@ -366,25 +347,19 @@ logread -f
 
 ## 12. 升级
 
-本地构建模式：
-
-```bash
-cd /opt/monitor/nodestatus
-git pull
-
-cd /opt/monitor/nezha-dash
-git pull
-
-cd /opt/monitor
-docker compose build
-docker compose up -d
-```
-
 镜像发布模式：
 
 ```bash
 cd /opt/monitor
 docker compose pull
+docker compose up -d
+```
+
+本地构建模式：
+
+```bash
+cd /opt/monitor
+docker compose build
 docker compose up -d
 ```
 
@@ -478,5 +453,5 @@ image: cokemine/nodestatus
 它不包含当前项目的自定义改动。需要直接构建当前仓库，或发布自己的镜像后使用：
 
 ```yaml
-image: sheldonsix/nodestatus:latest
+image: tattoo8098/nodestatus:latest
 ```
