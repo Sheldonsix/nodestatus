@@ -64,4 +64,4 @@ RUN if [ "$USE_CHINA_MIRROR" = 1 ]; then \
 
 EXPOSE 35601
 
-CMD ["sh", "-c", "PATH=/app/node_modules/.bin:$PATH node packages/nodestatus-server/scripts/init.js && exec node packages/nodestatus-server/build/app.js"]
+CMD ["sh", "-c", "PATH=/app/packages/nodestatus-server/node_modules/.bin:/app/node_modules/.bin:$PATH node packages/nodestatus-server/scripts/init.js && exec node packages/nodestatus-server/build/app.js"]
