@@ -55,7 +55,7 @@ RUN if [ "$USE_CHINA_MIRROR" = 1 ]; then \
   fi;\
   apk add --no-cache --virtual .build-deps git make gcc g++ python3 \
   && apk add --no-cache openssl \
-  && npm install pm2 pnpm -g \
+  && npm install pnpm -g \
   && pnpm install --prod --frozen-lockfile \
   && pnpm store prune \
   && rm -rf $(pnpm store path) \
@@ -64,4 +64,4 @@ RUN if [ "$USE_CHINA_MIRROR" = 1 ]; then \
 
 EXPOSE 35601
 
-CMD ["pm2-runtime", "start", "npm" , "--", "start"]
+CMD ["sh", "-c", "PATH=/app/node_modules/.bin:$PATH node packages/nodestatus-server/scripts/init.js && exec node packages/nodestatus-server/build/app.js"]
