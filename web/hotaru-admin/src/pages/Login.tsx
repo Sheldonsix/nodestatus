@@ -22,7 +22,7 @@ const Login: FC = () => {
     const { username, password } = values;
     const data = await api.post<IResp<string>>('/api/admin/session', { json: { username, password } }).json<IResp<string>>();
     if (!data.code) {
-      notify('Success', undefined, 'success');
+      notify('成功', undefined, 'success');
       localStorage.setItem('token', data.data);
       await mutate('/api/admin/session', {
         code: 0,
@@ -45,7 +45,7 @@ const Login: FC = () => {
               aria-hidden="true"
               className="object-cover w-full h-full"
               src={cherry}
-              alt="Office"
+              alt="登录背景"
             />
           </div>
           <div className="flex flex-col items-center justify-center p-6 sm:p-16 md:w-1/2">
@@ -57,25 +57,25 @@ const Login: FC = () => {
             >
               <Form.Item
                 name="username"
-                rules={[{ required: true, message: 'Please input your Username!' }]}
+                rules={[{ required: true, message: '请输入用户名' }]}
               >
-                <Input size="large" prefix={<UserOutlined />} placeholder="Username" />
+                <Input size="large" prefix={<UserOutlined />} placeholder="用户名" />
               </Form.Item>
               <Form.Item
                 name="password"
-                rules={[{ required: true, message: 'Please input your Password!' }]}
+                rules={[{ required: true, message: '请输入密码' }]}
               >
                 <Input
                   size="large"
                   prefix={<LockOutlined />}
                   type="password"
-                  placeholder="Password"
+                  placeholder="密码"
                 />
               </Form.Item>
 
               <Form.Item>
                 <Button type="primary" size="large" htmlType="submit" block>
-                  Log in
+                  登录
                 </Button>
               </Form.Item>
             </Form>

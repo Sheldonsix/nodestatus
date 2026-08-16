@@ -12,17 +12,17 @@ import smallLogo from '../assets/img/logo.svg';
 
 const menus = [
   {
-    label: 'Dashboard',
+    label: '仪表盘',
     icon: <DashboardOutlined />,
     key: '/dashboard',
   },
   {
-    label: 'Management',
+    label: '节点管理',
     icon: <ProfileFilled />,
     key: '/management',
   },
   {
-    label: 'Incidents',
+    label: '故障记录',
     icon: <AlertFilled />,
     key: '/incidents',
   },

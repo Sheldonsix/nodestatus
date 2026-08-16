@@ -56,7 +56,7 @@ const Dashboard: FC = () => {
 
   const columns: ColumnsType<ITable> = useMemo(() => [
     {
-      title: 'SERVER',
+      title: '服务器',
       dataIndex: 'server',
       render(_, record) {
         return (
@@ -73,17 +73,17 @@ const Dashboard: FC = () => {
       },
     },
     {
-      title: 'STATUS',
+      title: '状态',
       dataIndex: 'status',
       align: 'center',
       render: status => (
         status
-          ? <Tag color="success">Online</Tag>
-          : <Tag color="error">Offline</Tag>
+          ? <Tag color="success">在线</Tag>
+          : <Tag color="error">离线</Tag>
       ),
     },
     {
-      title: 'UPTIME',
+      title: '运行时间',
       dataIndex: 'uptime',
       align: 'center',
       render(uptime) {
@@ -91,7 +91,7 @@ const Dashboard: FC = () => {
       },
     },
     {
-      title: 'LOAD',
+      title: '负载',
       dataIndex: 'load',
       align: 'center',
     },
@@ -106,7 +106,7 @@ const Dashboard: FC = () => {
 
   return (
     <>
-      <Title level={2} className="my-6 text-3xl">Dashboard</Title>
+      <Title level={2} className="my-6 text-3xl">仪表盘</Title>
       <Row gutter={32} className="mb-4">
         <Col xs={{ span: 24 }} lg={{ span: 12 }} className="flex items-center mb-4 xs:mb-0">
           <MapChart count={count.record} />
@@ -115,7 +115,7 @@ const Dashboard: FC = () => {
           <Row>
             <Col xs={{ span: 24 }} className="mb-4">
               <StateCard
-                title="Servers Total"
+                title="服务器总数"
                 count={servers.length}
                 icon={(
                   <RoundIcon
@@ -128,7 +128,7 @@ const Dashboard: FC = () => {
             </Col>
             <Col xs={{ span: 24 }} className="mb-4">
               <StateCard
-                title="Servers Online"
+                title="在线服务器"
                 count={count.online}
                 icon={(
                   <RoundIcon
@@ -141,7 +141,7 @@ const Dashboard: FC = () => {
             </Col>
             <Col xs={{ span: 24 }}>
               <StateCard
-                title="Servers Offline"
+                title="离线服务器"
                 count={servers.length - count.online}
                 icon={(
                   <RoundIcon

@@ -25,7 +25,7 @@ const Header: FC<Props> = (props) => {
       items={[
         {
           key: 'logout',
-          label: 'Logout',
+          label: '退出登录',
           icon: <LogoutOutlined className="mr-2 align-middle" />,
           className: 'align-middle',
         },

@@ -4,6 +4,7 @@ import isEqual from 'fast-deep-equal/es6/react';
 
 /* https://simplemaps.com/data/world-cities */
 import countries from 'i18n-iso-countries';
+import i18nZh from 'i18n-iso-countries/langs/zh.json';
 import React from 'react';
 import {
   ComposableMap,
@@ -18,6 +19,8 @@ import geoMap from '../utils/world-110m.json';
 interface Props {
   count: Record<string, number>;
 }
+
+countries.registerLocale(i18nZh);
 
 const MapChart: FC<Props> = props => (
   <div className="bg-rose-500 w-full">
@@ -46,7 +49,7 @@ const MapChart: FC<Props> = props => (
           const K = key as keyof typeof coordinates;
           if (!coordinates[K])
             return;
-          const country = countries.getName(key, 'en', { select: 'official' });
+          const country = countries.getName(key, 'zh', { select: 'official' });
           return (
             <Tooltip
               title={`${country}: ${count}`}

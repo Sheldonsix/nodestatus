@@ -109,7 +109,7 @@ const reducer: Reducer<typeof initialState, ActionType> = (state, action) => {
 function basicValidator(_: unknown, value: string) {
   return [' ', '+', '&', '%', '/', '\\', '?', '#']
     .some(v => value.includes(v))
-    ? Promise.reject(new Error('This field cannot contain spaces and special characters'))
+    ? Promise.reject(new Error('不能包含空格和特殊字符'))
     : Promise.resolve();
 }
 
@@ -133,7 +133,7 @@ const Management: FC = () => {
   const handleModify = useCallback(() => {
     const data = form.getFieldsValue();
     api.put('/api/admin/servers', { json: { username: state.currentNode, data } }).json<IResp>().then((res) => {
-      notify('Success', res.msg, 'success');
+      notify('成功', res.msg, 'success');
       dispatch({ type: 'resetState', payload: { form, mutate } });
     });
   }, [state.currentNode, form, mutate]);
@@ -141,35 +141,35 @@ const Management: FC = () => {
   const handleCreate = useCallback(() => {
     const data = form.getFieldsValue();
     api.post('/api/admin/servers', { json: { ...data } }).json<IResp>().then((res) => {
-      notify('Success', res.msg, 'success');
+      notify('成功', res.msg, 'success');
       dispatch({ type: 'resetState', payload: { form, mutate } });
     });
   }, [form, mutate]);
 
   const handleDelete = useCallback((username: string) => {
     api.delete(`/api/admin/servers/${username}`).json<IResp>().then((res) => {
-      notify('Success', res.msg, 'success');
+      notify('成功', res.msg, 'success');
       dispatch({ type: 'resetState', payload: { form, mutate } });
     });
   }, [form, mutate]);
 
   const handleSortOrder = useCallback((order: number[]) => {
     api.put('/api/admin/servers/order', { json: { order } }).json<IResp>().then((res) => {
-      notify('Success', res.msg, 'success');
+      notify('成功', res.msg, 'success');
       dispatch({ type: 'resetState', payload: { form, mutate } });
     });
   }, [form, mutate]);
 
   const columns = useMemo<ColumnsType<IServer>>(() => ([
     {
-      title: 'SORT',
+      title: '排序',
       dataIndex: 'sort',
       width: 30,
       align: 'center',
       render: () => undefined,
     },
     {
-      title: 'SERVER',
+      title: '服务器',
       dataIndex: 'server',
       align: 'left',
       render(_, record) {
@@ -187,37 +187,37 @@ const Management: FC = () => {
       },
     },
     {
-      title: 'USERNAME',
+      title: '用户名',
       dataIndex: 'username',
       align: 'center',
     },
     {
-      title: 'TYPE',
+      title: '类型',
       dataIndex: 'type',
       align: 'center',
     },
     {
-      title: 'LOCATION',
+      title: '位置',
       dataIndex: 'location',
       align: 'center',
     },
     {
-      title: 'REGION',
+      title: '国家/地区',
       dataIndex: 'region',
       align: 'center',
     },
     {
-      title: 'STATUS',
+      title: '状态',
       dataIndex: 'disabled',
       align: 'center',
       render: disabled => (
         disabled
-          ? <Tag color="error">Disabled</Tag>
-          : <Tag color="success">Enabled</Tag>
+          ? <Tag color="error">已禁用</Tag>
+          : <Tag color="success">已启用</Tag>
       ),
     },
     {
-      title: 'ACTION',
+      title: '操作',
       dataIndex: 'action',
       align: 'center',
       render(_, record) {
@@ -235,7 +235,7 @@ const Management: FC = () => {
             }}
             />
             <DeleteOutlined onClick={() => confirm({
-              title: 'Are you sure you want to delete this item?',
+              title: '确定要删除这个节点吗？',
               icon: <ExclamationCircleOutlined />,
               onOk: () => handleDelete(record.username),
             })}
@@ -248,13 +248,13 @@ const Management: FC = () => {
 
   const TableFooter = useCallback(() => (
     <>
-      <Button type="primary" className="mr-6" onClick={() => dispatch({ type: 'showModal' })}>New</Button>
+      <Button type="primary" className="mr-6" onClick={() => dispatch({ type: 'showModal' })}>新建</Button>
       <Button
         type="primary"
         className="mr-6"
         onClick={() => dispatch({ type: 'showImportForm' })}
       >
-        Import
+        导入
       </Button>
       <Button
         type="primary"
@@ -268,7 +268,7 @@ const Management: FC = () => {
           dispatch({ type: 'reverseSortEnabled' });
         }}
       >
-        {!state.sortEnabled ? 'Sort' : 'Save'}
+        {!state.sortEnabled ? '排序' : '保存'}
       </Button>
     </>
   ), [dataSource, handleSortOrder, state.sortEnabled]);
@@ -320,7 +320,7 @@ const Management: FC = () => {
 
   return (
     <>
-      <Title level={2} className="my-6">Management</Title>
+      <Title level={2} className="my-6">节点管理</Title>
       {
         data
           ? (
@@ -349,7 +349,7 @@ const Management: FC = () => {
                   footer={TableFooter}
                 />
                 <Modal
-                  title={state.currentNode ? 'Modify Configuration' : 'New'}
+                  title={state.currentNode ? '修改配置' : '新建节点'}
                   visible={state.showModal}
                   onOk={state.currentNode ? handleModify : handleCreate}
                   onCancel={() => dispatch({ type: 'resetState', payload: { form } })}
@@ -374,14 +374,14 @@ const Management: FC = () => {
                   >
                     {state.isImport
                       ? (
-                          <Form.Item label="Data" name="data">
+                          <Form.Item label="数据" name="data">
                             <Input.TextArea rows={4} />
                           </Form.Item>
                         )
                       : (
                           <>
                             <Form.Item
-                              label="Username"
+                              label="用户名"
                               name="username"
                               rules={
                                 [
@@ -394,7 +394,7 @@ const Management: FC = () => {
                               <Input />
                             </Form.Item>
                             <Form.Item
-                              label="Password"
+                              label="密码"
                               name="password"
                               rules={
                                 [
@@ -406,23 +406,23 @@ const Management: FC = () => {
                             >
                               <Input.Password placeholder="留空不修改" />
                             </Form.Item>
-                            <Form.Item label="Name" name="name">
+                            <Form.Item label="名称" name="name">
                               <Input />
                             </Form.Item>
-                            <Form.Item label="Type" name="type">
+                            <Form.Item label="类型" name="type">
                               <Input />
                             </Form.Item>
-                            <Form.Item label="Location" name="location">
+                            <Form.Item label="位置" name="location">
                               <Input />
                             </Form.Item>
                             <Form.Item
-                              label="Region"
+                              label="国家/地区"
                               name="region"
                               rules={[{
                                 validator(_, value) {
                                   if (countries.isValid(value))
                                     return Promise.resolve();
-                                  return Promise.reject(new Error('Country not found!'));
+                                  return Promise.reject(new Error('未找到国家或地区'));
                                 },
                               }]}
                             >
@@ -447,10 +447,10 @@ const Management: FC = () => {
                                 <Input />
                               </AutoComplete>
                             </Form.Item>
-                            <Form.Item label="Disabled" name="disabled" valuePropName="checked">
+                            <Form.Item label="禁用" name="disabled" valuePropName="checked">
                               <Switch />
                             </Form.Item>
-                            <Form.Item label="Script">
+                            <Form.Item label="安装脚本">
                               <code
                                 className="bg-gray-200 px-2 py-0.5 leading-6 rounded break-all"
                               >

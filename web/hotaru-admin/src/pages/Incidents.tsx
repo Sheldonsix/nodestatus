@@ -37,51 +37,51 @@ const Incidents: FC = () => {
 
   const handleDeleteEvent = useCallback((id: number) => {
     api.delete(`/api/admin/events/${id}`).json<IResp>().then((res) => {
-      notify('Success', res.msg, 'success');
+      notify('成功', res.msg, 'success');
       return mutate();
     });
   }, [mutate]);
 
   const columns: ColumnsType<IEvent> = useMemo(() => [
     {
-      title: 'SERVER',
+      title: '服务器',
       dataIndex: 'server',
       render(_, record) {
         return record.username;
       },
     },
     {
-      title: 'TYPE',
+      title: '类型',
       dataIndex: 'type',
       render() {
-        return <Tag color="error">DOWN</Tag>;
+        return <Tag color="error">宕机</Tag>;
       },
     },
     {
-      title: 'RESOLVED',
+      title: '恢复状态',
       dataIndex: 'resolved',
       render(resolved) {
         return resolved
-          ? <Tag color="success">Resolved</Tag>
-          : <Tag color="error">Unresolved</Tag>;
+          ? <Tag color="success">已恢复</Tag>
+          : <Tag color="error">未恢复</Tag>;
       },
     },
     {
-      title: 'CreatedAt',
+      title: '创建时间',
       dataIndex: 'created_at',
       render(createdAt) {
         return dayjs(createdAt).format('YYYY-MM-DD hh:mm');
       },
     },
     {
-      title: 'ResolvedAt',
+      title: '恢复时间',
       dataIndex: 'updated_at',
       render(updatedAt, record) {
         return record.resolved ? dayjs(updatedAt).format('YYYY-MM-DD hh:mm') : '';
       },
     },
     {
-      title: 'ACTION',
+      title: '操作',
       dataIndex: 'action',
       align: 'center',
       render(_, record) {
@@ -89,12 +89,12 @@ const Incidents: FC = () => {
           <Button
             danger
             onClick={() => Modal.confirm({
-              title: 'Are you sure you want to delete this item?',
+              title: '确定要删除这条记录吗？',
               icon: <ExclamationCircleOutlined />,
               onOk: () => handleDeleteEvent(record.id),
             })}
           >
-            Delete
+            删除
           </Button>
         );
       },
@@ -107,22 +107,22 @@ const Incidents: FC = () => {
         type="primary"
         danger
         onClick={() => Modal.confirm({
-          title: 'Are you sure you want to delete all items?',
+          title: '确定要删除全部记录吗？',
           icon: <ExclamationCircleOutlined />,
           onOk: () => api.delete('/api/admin/events').json<IResp>().then((res) => {
-            notify('Success', res.msg, 'success');
+            notify('成功', res.msg, 'success');
             return mutate();
           }),
         })}
       >
-        Delete All
+        全部删除
       </Button>
     </div>
   ), [mutate]);
 
   return (
     <>
-      <Title level={2} className="my-6 text-3xl">Incident History</Title>
+      <Title level={2} className="my-6 text-3xl">故障记录</Title>
       {
         dataList
           ? (

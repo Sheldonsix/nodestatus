@@ -3,9 +3,11 @@ import React from 'react';
 
 const Footer: FC = () => (
   <p className="text-center">
-    Powered by
+    由
     {' '}
-    <a href="https://github.com/cokemine/nodestatus">NodeStatus</a>
+    <a href="https://github.com/sheldonsix/nodestatus">NodeStatus</a>
+    {' '}
+    提供支持
   </p>
 );
 
