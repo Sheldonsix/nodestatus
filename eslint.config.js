@@ -50,6 +50,8 @@ export default antfu(
       'antfu/no-top-level-await': 'off',
 
       // React refresh / components rules
+      // React 17 does not have react-dom/client createRoot.
+      'react/dom-no-render': 'off',
       'react-refresh/only-export-components': 'off',
       'react/prop-types': 'off',
       'react/set-state-in-effect': 'off',
