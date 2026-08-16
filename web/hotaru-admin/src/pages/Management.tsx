@@ -39,6 +39,7 @@ import React, {
 import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
 import useSWR from 'swr';
 import Loading from '../components/Loading';
+import { useI18n } from '../i18n';
 import api from '../lib/api';
 import { notify } from '../utils';
 
@@ -129,6 +130,8 @@ const Management: FC = () => {
   const [form] = Form.useForm<IServer & { password: string }>();
   const { confirm } = Modal;
   const dataSource = data?.data;
+
+  const { t } = useI18n();
 
   const handleModify = useCallback(() => {
     const data = form.getFieldsValue();
@@ -320,7 +323,7 @@ const Management: FC = () => {
 
   return (
     <>
-      <Title level={2} className="my-6">节点管理</Title>
+      <Title level={2} className="my-6">{t('management')}</Title>
       {
         data
           ? (

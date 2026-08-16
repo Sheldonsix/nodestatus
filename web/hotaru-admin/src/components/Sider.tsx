@@ -9,28 +9,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import logo from '../assets/img/logo.png';
 import smallLogo from '../assets/img/logo.svg';
-
-const menus = [
-  {
-    label: '仪表盘',
-    icon: <DashboardOutlined />,
-    key: '/dashboard',
-  },
-  {
-    label: '节点管理',
-    icon: <ProfileFilled />,
-    key: '/management',
-  },
-  {
-    label: '故障记录',
-    icon: <AlertFilled />,
-    key: '/incidents',
-  },
-].map(menu => ({
-  ...menu,
-  className: 'h-12',
-  style: { lineHeight: '3rem' },
-}));
+import { useI18n } from '../i18n';
 
 interface Props {
   isCollapsed: boolean;
@@ -38,6 +17,29 @@ interface Props {
 
 const Sider: FC<Props> = ({ isCollapsed }) => {
   const navigate = useNavigate();
+  const { t } = useI18n();
+
+  const menus = [
+    {
+      label: t('dashboard'),
+      icon: <DashboardOutlined />,
+      key: '/dashboard',
+    },
+    {
+      label: t('management'),
+      icon: <ProfileFilled />,
+      key: '/management',
+    },
+    {
+      label: t('incidents'),
+      icon: <AlertFilled />,
+      key: '/incidents',
+    },
+  ].map(menu => ({
+    ...menu,
+    className: 'h-12',
+    style: { lineHeight: '3rem' },
+  }));
   return (
     <>
       <img src={logo} alt="" className="m-auto p-4 lg:hidden" draggable="false" />
