@@ -160,7 +160,7 @@ const Management: FC = () => {
     });
   }, [form, mutate]);
 
-  const columns = useMemo<ColumnsType<IServer>>(() => [
+  const columns = useMemo<ColumnsType<IServer>>(() => ([
     {
       title: 'SORT',
       dataIndex: 'sort',
@@ -171,10 +171,10 @@ const Management: FC = () => {
     {
       title: 'SERVER',
       dataIndex: 'server',
-      align: 'center',
+      align: 'left',
       render(_, record) {
         return (
-          <div className="flex items-center text-sm">
+          <div className="flex items-center  text-sm">
             <svg viewBox="0 0 100 100" className="mr-3 block h-12 w-12">
               <use xlinkHref={`#${record.region}`} />
             </svg>
@@ -244,8 +244,7 @@ const Management: FC = () => {
         );
       },
     },
-
-  ], [confirm, form, handleDelete]);
+  ] satisfies ColumnsType<IServer>).filter(item => item.dataIndex !== 'sort' || state.sortEnabled), [state.sortEnabled, confirm, form, handleDelete]);
 
   const TableFooter = useCallback(() => (
     <>
